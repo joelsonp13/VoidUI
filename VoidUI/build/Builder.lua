@@ -60,7 +60,7 @@ function builder:Compile()
 local RayfieldEnhanced = {}
 
 -- === Environment Setup ===
-local _getgenv = rawget(_G, "getgenv")
+local _getgenv = (type(getgenv) == "function" and getgenv) or rawget(_G, "getgenv")
 local requestsDisabled = false
 local customAssetId = nil
 local secureMode = false
@@ -92,7 +92,26 @@ local HttpService = getService("HttpService")
 local Lighting = getService("Lighting")
 
 -- === Load Original Rayfield Core ===
-local RayfieldCore = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+local function _getCompiler()
+	local c = (type(loadstring) == "function" and loadstring)
+		or (type(load) == "function" and load)
+		or rawget(_G, "loadstring")
+		or rawget(_G, "load")
+	if (not c) and _getgenv then
+		local ok, env = pcall(_getgenv)
+		if ok and type(env) == "table" then
+			c = env.loadstring or env.load
+		end
+	end
+	return c
+end
+
+local _compiler = _getCompiler()
+assert(type(_compiler) == "function", "[VoidUI] loadstring/load indisponivel")
+local _raySrc = game:HttpGet("https://sirius.menu/rayfield")
+local _rayChunk = _compiler(_raySrc, "@Rayfield")
+assert(type(_rayChunk) == "function", "[VoidUI] falha ao compilar Rayfield")
+local RayfieldCore = _rayChunk()
 ]]
 	
 	local compiled = header

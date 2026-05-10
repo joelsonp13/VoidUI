@@ -12,17 +12,17 @@
 -- 	PHASE 1: ENVIRONMENT SETUP
 -- ============================================================
 
-local getgenv = rawget(_G, "getgenv")
+local getgenvFn = (type(getgenv) == "function" and getgenv) or rawget(_G, "getgenv")
 local requestsDisabled = false
 local customAssetId = nil
 local secureMode = false
 
-if getgenv then
-	local ok, result = pcall(function() return getgenv().RAYFIELD_ENHANCED_ASSET_ID end)
+if getgenvFn then
+	local ok, result = pcall(function() return getgenvFn().RAYFIELD_ENHANCED_ASSET_ID end)
 	if ok and type(result) == "number" then customAssetId = result end
-	local ok2, result2 = pcall(function() return getgenv().RAYFIELD_ENHANCED_SECURE end)
+	local ok2, result2 = pcall(function() return getgenvFn().RAYFIELD_ENHANCED_SECURE end)
 	if ok2 and result2 then secureMode = true end
-	local ok3, result3 = pcall(function() return getgenv().DISABLE_RAYFIELD_ENHANCED_REQUESTS end)
+	local ok3, result3 = pcall(function() return getgenvFn().DISABLE_RAYFIELD_ENHANCED_REQUESTS end)
 	if ok3 and result3 then requestsDisabled = true end
 end
 
@@ -48,9 +48,12 @@ local Lighting = getService("Lighting")
 -- ============================================================
 
 local function getCompiler()
-	local compiler = rawget(_G, "loadstring") or rawget(_G, "load")
-	if (not compiler) and getgenv then
-		local ok, env = pcall(getgenv)
+	local compiler = (type(loadstring) == "function" and loadstring)
+		or (type(load) == "function" and load)
+		or rawget(_G, "loadstring")
+		or rawget(_G, "load")
+	if (not compiler) and getgenvFn then
+		local ok, env = pcall(getgenvFn)
 		if ok and type(env) == "table" then
 			compiler = env.VOIDUI_COMPILER or env.loadstring or env.load
 		end
@@ -115,9 +118,9 @@ end
 local RayfieldCore
 do
 	local env = nil
-	if getgenv then
+	if getgenvFn then
 		pcall(function()
-			env = getgenv()
+			env = getgenvFn()
 		end)
 	end
 
