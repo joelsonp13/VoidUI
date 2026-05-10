@@ -38,13 +38,59 @@ local function safeCall(where, fn)
 	return false, result
 end
 
+local function getCompiler()
+	local compiler = rawget(_G, "loadstring") or rawget(_G, "load")
+	if (not compiler) and getgenv then
+		local ok, env = pcall(getgenv)
+		if ok and type(env) == "table" then
+			compiler = env.loadstring or env.load
+		end
+	end
+	return compiler
+end
+
+local function httpGetCompat(url)
+	local ok, data = pcall(function()
+		return game:HttpGet(url)
+	end)
+	if ok and type(data) == "string" and #data > 0 then
+		return data
+	end
+
+	local req = (syn and syn.request) or (http and http.request) or http_request or request
+	if req then
+		local rok, resp = pcall(function()
+			return req({ Url = url, Method = "GET" })
+		end)
+		if rok and resp then
+			local body = resp.Body or resp.body
+			if type(body) == "string" and #body > 0 then
+				return body
+			end
+		end
+	end
+
+	return nil
+end
+
 dlog("Iniciando script")
 
 -- Carrega a VoidUI
 local VoidUI
 do
 	local ok, result = safeCall("Load VoidUI (HttpGet + loadstring)", function()
-		return loadstring(game:HttpGet("https://raw.githubusercontent.com/joelsonp13/VoidUI/main/build/Compiled.lua"))()
+		local compiler = getCompiler()
+		assert(type(compiler) == "function", "loadstring/load indisponivel no executor")
+
+		local src = httpGetCompat("https://raw.githubusercontent.com/joelsonp13/VoidUI/main/build/Compiled.lua")
+		assert(type(src) == "string" and #src > 0, "falha ao baixar Compiled.lua")
+
+		local chunk = compiler(src)
+		assert(type(chunk) == "function", "falha ao compilar Compiled.lua")
+
+		local lib = chunk()
+		assert(type(lib) == "table", "Compiled.lua nao retornou tabela")
+		return lib
 	end)
 	if not ok or type(result) ~= "table" then
 		error("[VoidPanel] Falha ao carregar VoidUI. Veja logs acima.")

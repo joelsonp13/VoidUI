@@ -28,7 +28,10 @@ end
 
 local function getService(name)
 	local service = game:GetService(name)
-	return if cloneref then cloneref(service) else service
+	if cloneref then
+		return cloneref(service)
+	end
+	return service
 end
 
 -- Services
