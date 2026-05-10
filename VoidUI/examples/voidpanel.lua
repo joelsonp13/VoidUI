@@ -54,7 +54,7 @@ local function httpGetCompat(url)
 		return game:HttpGet(url)
 	end)
 	if ok and type(data) == "string" and #data > 0 then
-		return data
+		return data, nil
 	end
 
 	local req = (syn and syn.request) or (http and http.request) or http_request or request
@@ -63,14 +63,17 @@ local function httpGetCompat(url)
 			return req({ Url = url, Method = "GET" })
 		end)
 		if rok and resp then
+			local status = tonumber(resp.StatusCode or resp.status_code or 0) or 0
 			local body = resp.Body or resp.body
-			if type(body) == "string" and #body > 0 then
-				return body
+			if type(body) == "string" and #body > 0 and (status == 0 or (status >= 200 and status < 300)) then
+				return body, nil
 			end
+			return nil, "request status " .. tostring(status)
 		end
+		return nil, "request falhou: " .. tostring(resp)
 	end
 
-	return nil
+	return nil, "sem game:HttpGet e sem request compat"
 end
 
 dlog("Iniciando script")
@@ -82,11 +85,77 @@ do
 		local compiler = getCompiler()
 		assert(type(compiler) == "function", "loadstring/load indisponivel no executor")
 
-		local src = httpGetCompat("https://raw.githubusercontent.com/joelsonp13/VoidUI/main/build/Compiled.lua")
-		assert(type(src) == "string" and #src > 0, "falha ao baixar Compiled.lua")
+		local env = (getgenv and getgenv()) or _G
+		local inlineSrc = env and env.VOIDUI_COMPILED_SOURCE
+		local customUrl = env and env.VOIDUI_COMPILED_URL
+		local urls = {
+			customUrl,
+			"https://raw.githubusercontent.com/joelsonp13/VoidUI/main/VoidUI/build/Compiled.lua",
+			"https://cdn.jsdelivr.net/gh/joelsonp13/VoidUI@main/VoidUI/build/Compiled.lua",
+			"https://raw.githubusercontent.com/joelsonp13/VoidUI/main/build/Compiled.lua",
+			"https://cdn.jsdelivr.net/gh/joelsonp13/VoidUI@main/build/Compiled.lua",
+		}
 
-		local chunk = compiler(src)
-		assert(type(chunk) == "function", "falha ao compilar Compiled.lua")
+		local src = inlineSrc
+		if type(src) ~= "string" or #src == 0 then
+			local errors = {}
+			for _, url in ipairs(urls) do
+				if type(url) == "string" and #url > 0 then
+					dlog("Tentando URL: " .. url)
+					src, err = httpGetCompat(url)
+					if type(src) == "string" and #src > 0 then
+						dlog("Download OK: " .. url)
+						break
+					else
+						local msg = tostring(err or "erro desconhecido")
+						dlog("Falhou URL: " .. url .. " -> " .. msg)
+						table.insert(errors, "[" .. url .. "] " .. msg)
+					end
+				end
+			end
+			if (type(src) ~= "string" or #src == 0) and #errors > 0 then
+				error("falha ao obter Compiled.lua. Detalhes: " .. table.concat(errors, " | "))
+			end
+		end
+
+		assert(type(src) == "string" and #src > 0, "falha ao obter Compiled.lua (URL/host inacessivel)")
+		dlog("Compiled.lua baixado (" .. tostring(#src) .. " bytes)")
+		local firstLine = (src:match("([^\r\n]+)") or ""):sub(1, 140)
+		dlog("Primeira linha do download: " .. firstLine)
+		if src:find("404: Not Found", 1, true) or src:find("<!DOCTYPE html", 1, true) or src:find("<html", 1, true) then
+			error("URL retornou pagina invalida (404/HTML), nao um Lua compilado")
+		end
+		if src:find("return if cloneref then cloneref%(service%) else service", 1, false) then
+			dlog("ATENCAO: Compiled remoto esta com sintaxe Luau antiga (return if ...)")
+		end
+
+		local chunk, compileErr = compiler(src, "@VoidUICompiled")
+		if type(chunk) ~= "function" then
+			error("falha ao compilar Compiled.lua -> " .. tostring(compileErr))
+		end
+
+		local env = (getgenv and getgenv()) or _G
+		if type(env) == "table" then
+			env.VOIDUI_COMPILER = compiler
+			if type(env.VOIDUI_RAYFIELD_SOURCE) ~= "string" then
+				local rayfieldUrls = {
+					env.VOIDUI_RAYFIELD_URL,
+					"https://sirius.menu/rayfield",
+					"https://raw.githubusercontent.com/shlexware/Rayfield/main/source",
+					"https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source",
+				}
+				for _, rurl in ipairs(rayfieldUrls) do
+					if type(rurl) == "string" and #rurl > 0 then
+						local rsrc = httpGetCompat(rurl)
+						if type(rsrc) == "string" and #rsrc > 0 then
+							env.VOIDUI_RAYFIELD_SOURCE = rsrc
+							dlog("Rayfield source injetado: " .. rurl)
+							break
+						end
+					end
+				end
+			end
+		end
 
 		local lib = chunk()
 		assert(type(lib) == "table", "Compiled.lua nao retornou tabela")

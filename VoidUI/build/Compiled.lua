@@ -52,7 +52,7 @@ local function getCompiler()
 	if (not compiler) and getgenv then
 		local ok, env = pcall(getgenv)
 		if ok and type(env) == "table" then
-			compiler = env.loadstring or env.load
+			compiler = env.VOIDUI_COMPILER or env.loadstring or env.load
 		end
 	end
 	return compiler
@@ -114,7 +114,35 @@ end
 
 local RayfieldCore
 do
+	local env = nil
+	if getgenv then
+		pcall(function()
+			env = getgenv()
+		end)
+	end
+
+	-- Optional injection path (lets caller bypass remote loader limits)
+	if type(env) == "table" and type(env.VOIDUI_RAYFIELD_CORE) == "table" then
+		RayfieldCore = env.VOIDUI_RAYFIELD_CORE
+	end
+
+	if (not RayfieldCore) and type(env) == "table" and type(env.VOIDUI_RAYFIELD_SOURCE) == "string" then
+		local compiler = getCompiler()
+		if type(compiler) == "function" then
+			local okChunk, chunkOrErr = pcall(function()
+				return compiler(env.VOIDUI_RAYFIELD_SOURCE, "@VoidUIRayfield")
+			end)
+			if okChunk and type(chunkOrErr) == "function" then
+				local okRun, result = pcall(chunkOrErr)
+				if okRun and type(result) == "table" then
+					RayfieldCore = result
+				end
+			end
+		end
+	end
+
 	local sources = {
+		(type(env) == "table" and env.VOIDUI_RAYFIELD_URL) or nil,
 		"https://sirius.menu/rayfield",
 		"https://raw.githubusercontent.com/shlexware/Rayfield/main/source",
 	}
