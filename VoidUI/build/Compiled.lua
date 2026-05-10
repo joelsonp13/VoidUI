@@ -16,19 +16,58 @@ local getgenvFn = (type(getgenv) == "function" and getgenv) or rawget(_G, "getge
 local requestsDisabled = false
 local customAssetId = nil
 local secureMode = false
+local __VOIDUI_DEBUG = true
+local __VOIDUI_LOG_STEP = 0
+
+local function __voiduiLog(msg)
+	if not __VOIDUI_DEBUG then return end
+	__VOIDUI_LOG_STEP = __VOIDUI_LOG_STEP + 1
+	local line = string.format("[VoidUI][%03d] %s", __VOIDUI_LOG_STEP, tostring(msg))
+	print(line)
+	warn(line)
+end
+
+local function __voiduiErr(where, err)
+	local line = string.format("[VoidUI][ERRO] %s -> %s", tostring(where), tostring(err))
+	print(line)
+	warn(line)
+end
+
+local function __voiduiPcall(where, fn)
+	local ok, result = pcall(fn)
+	if ok then
+		__voiduiLog(where .. " OK")
+		return true, result
+	end
+	__voiduiErr(where, result)
+	return false, result
+end
 
 if getgenvFn then
+	local okEnv, env = pcall(getgenvFn)
+	if okEnv and type(env) == "table" then
+		if env.VOIDUI_DEBUG ~= nil then
+			__VOIDUI_DEBUG = env.VOIDUI_DEBUG and true or false
+		end
+	end
+	__voiduiLog("Bootstrap start")
+	__voiduiLog("getgenv detected")
 	local ok, result = pcall(function() return getgenvFn().RAYFIELD_ENHANCED_ASSET_ID end)
 	if ok and type(result) == "number" then customAssetId = result end
 	local ok2, result2 = pcall(function() return getgenvFn().RAYFIELD_ENHANCED_SECURE end)
 	if ok2 and result2 then secureMode = true end
 	local ok3, result3 = pcall(function() return getgenvFn().DISABLE_RAYFIELD_ENHANCED_REQUESTS end)
 	if ok3 and result3 then requestsDisabled = true end
+	__voiduiLog("Flags secure=" .. tostring(secureMode) .. " requestsDisabled=" .. tostring(requestsDisabled))
+else
+	__voiduiLog("getgenv not found")
 end
 
 local function getService(name)
+	__voiduiLog("GetService " .. tostring(name))
 	local service = game:GetService(name)
 	if cloneref then
+		__voiduiLog("cloneref applied for " .. tostring(name))
 		return cloneref(service)
 	end
 	return service
@@ -48,6 +87,7 @@ local Lighting = getService("Lighting")
 -- ============================================================
 
 local function getCompiler()
+	__voiduiLog("Resolving compiler")
 	local compiler = (type(loadstring) == "function" and loadstring)
 		or (type(load) == "function" and load)
 		or rawget(_G, "loadstring")
@@ -58,34 +98,46 @@ local function getCompiler()
 			compiler = env.VOIDUI_COMPILER or env.loadstring or env.load
 		end
 	end
+	__voiduiLog("Compiler resolved? " .. tostring(type(compiler) == "function"))
 	return compiler
 end
 
 local function httpGetText(url)
+	__voiduiLog("HTTP GET try game:HttpGet -> " .. tostring(url))
 	local ok, data = pcall(function()
 		return game:HttpGet(url)
 	end)
 	if ok and type(data) == "string" and #data > 0 then
+		__voiduiLog("HTTP GET success via game:HttpGet bytes=" .. tostring(#data))
 		return data
 	end
+	__voiduiLog("HTTP GET failed via game:HttpGet")
 
 	local req = (syn and syn.request) or (http and http.request) or http_request or request
 	if req then
+		__voiduiLog("HTTP GET try request() -> " .. tostring(url))
 		local rok, resp = pcall(function()
 			return req({ Url = url, Method = "GET" })
 		end)
 		if rok and resp then
+			local status = tostring(resp.StatusCode or resp.status_code or "n/a")
+			__voiduiLog("request() returned status=" .. status)
 			local body = resp.Body or resp.body
 			if type(body) == "string" and #body > 0 then
+				__voiduiLog("HTTP GET success via request bytes=" .. tostring(#body))
 				return body
 			end
 		end
+	else
+		__voiduiLog("No request() API available")
 	end
 
+	__voiduiErr("httpGetText", "all methods failed for " .. tostring(url))
 	return nil
 end
 
 local function loadRemoteModule(url)
+	__voiduiLog("loadRemoteModule start " .. tostring(url))
 	local compiler = getCompiler()
 	if type(compiler) ~= "function" then
 		return nil, "loadstring/load indisponivel no executor"
@@ -95,23 +147,28 @@ local function loadRemoteModule(url)
 	if type(source) ~= "string" then
 		return nil, "falha no download: " .. tostring(url)
 	end
+	__voiduiLog("Remote source first line: " .. tostring((source:match("([^\r\n]+)") or ""):sub(1, 120)))
 
 	local cOk, chunkOrErr = pcall(function()
-		return compiler(source)
+		return compiler(source, "@VoidUIRemote")
 	end)
 	if not cOk or type(chunkOrErr) ~= "function" then
+		__voiduiErr("loadRemoteModule compile", chunkOrErr)
 		return nil, "falha ao compilar modulo remoto"
 	end
 
 	local rOk, result = pcall(chunkOrErr)
 	if not rOk then
+		__voiduiErr("loadRemoteModule execute", result)
 		return nil, "falha ao executar modulo remoto: " .. tostring(result)
 	end
 
 	if type(result) ~= "table" then
+		__voiduiErr("loadRemoteModule return type", type(result))
 		return nil, "modulo remoto nao retornou tabela"
 	end
 
+	__voiduiLog("loadRemoteModule success " .. tostring(url))
 	return result
 end
 
@@ -123,13 +180,16 @@ do
 			env = getgenvFn()
 		end)
 	end
+	__voiduiLog("Rayfield bootstrap begin")
 
 	-- Optional injection path (lets caller bypass remote loader limits)
 	if type(env) == "table" and type(env.VOIDUI_RAYFIELD_CORE) == "table" then
+		__voiduiLog("Using injected VOIDUI_RAYFIELD_CORE")
 		RayfieldCore = env.VOIDUI_RAYFIELD_CORE
 	end
 
 	if (not RayfieldCore) and type(env) == "table" and type(env.VOIDUI_RAYFIELD_SOURCE) == "string" then
+		__voiduiLog("Trying injected VOIDUI_RAYFIELD_SOURCE")
 		local compiler = getCompiler()
 		if type(compiler) == "function" then
 			local okChunk, chunkOrErr = pcall(function()
@@ -138,15 +198,19 @@ do
 			if okChunk and type(chunkOrErr) == "function" then
 				local okRun, result = pcall(chunkOrErr)
 				if okRun and type(result) == "table" then
+					__voiduiLog("Injected rayfield source executed successfully")
 					RayfieldCore = result
 				else
 					env.__VOIDUI_RAYFIELD_LASTERR = "exec source: " .. tostring(result)
+					__voiduiErr("Injected rayfield exec", result)
 				end
 			else
 				env.__VOIDUI_RAYFIELD_LASTERR = "compile source: " .. tostring(chunkOrErr)
+				__voiduiErr("Injected rayfield compile", chunkOrErr)
 			end
 		else
 			env.__VOIDUI_RAYFIELD_LASTERR = "compiler indisponivel para VOIDUI_RAYFIELD_SOURCE"
+			__voiduiErr("Injected rayfield compiler", "indisponivel")
 		end
 	end
 
@@ -160,17 +224,22 @@ do
 
 	local lastErr = (type(env) == "table" and env.__VOIDUI_RAYFIELD_LASTERR) or "erro desconhecido"
 	for _, url in ipairs(sources) do
+		__voiduiLog("Trying rayfield URL: " .. tostring(url))
 		local result, err = loadRemoteModule(url)
 		if result then
 			RayfieldCore = result
+			__voiduiLog("Rayfield loaded from: " .. tostring(url))
 			break
 		end
 		lastErr = tostring(err or lastErr) .. " | url=" .. tostring(url)
+		__voiduiErr("Rayfield URL failed", lastErr)
 	end
 
 	if not RayfieldCore then
+		__voiduiErr("Rayfield bootstrap failed", lastErr)
 		error("[VoidUI] Nao foi possivel carregar RayfieldCore: " .. tostring(lastErr))
 	end
+	__voiduiLog("Rayfield bootstrap success")
 end
 
 -- ============================================================
@@ -807,8 +876,10 @@ EnhancedLib.ConfigManager = ConfigManager
 
 function EnhancedLib:CreateWindow(config)
 	config = config or {}
+	__voiduiLog("CreateWindow start title=" .. tostring(config.Title or config.Name))
 
-	local window = RayfieldCore:CreateWindow({
+	local okWin, window = __voiduiPcall("RayfieldCore:CreateWindow", function()
+		return RayfieldCore:CreateWindow({
 		Name = config.Title or config.Name or "Rayfield Enhanced",
 		Icon = config.Icon or 0,
 		LoadingTitle = config.LoadingTitle or config.Title or "Rayfield Enhanced",
@@ -822,16 +893,25 @@ function EnhancedLib:CreateWindow(config)
 		KeySystem = config.KeySystem or false,
 		KeySettings = config.KeySettings,
 	})
+	end)
+	if not okWin or type(window) ~= "table" then
+		error("[VoidUI] CreateWindow falhou no RayfieldCore")
+	end
 
 	if config.Theme and config.Theme ~= "Default" then
-		pcall(function() window.ModifyTheme(config.Theme) end)
-		ThemeManager:ApplyTheme(config.Theme)
+		__voiduiPcall("window.ModifyTheme", function()
+			window.ModifyTheme(config.Theme)
+		end)
+		__voiduiPcall("ThemeManager:ApplyTheme", function()
+			ThemeManager:ApplyTheme(config.Theme)
+		end)
 	end
 
 	-- Enhanced window with chainable API
 	local enhancedWindow = {_window = window, _config = config, _tabs = {}}
 
 	function enhancedWindow:Tab(config)
+		__voiduiLog("Create Tab start " .. tostring(type(config) == "table" and config.Name or config))
 		if type(config) == "string" then config = { Name = config, Icon = 0 } end
 		local tab = window:CreateTab(config.Name, config.Icon or 0)
 		local enhancedTab = {_tab = tab, _elements = {}}
@@ -871,9 +951,12 @@ function EnhancedLib:CreateWindow(config)
 	end
 
 	task.delay(2, function()
-		if RayfieldCore.LoadConfiguration then RayfieldCore:LoadConfiguration() end
+		__voiduiPcall("Delayed LoadConfiguration", function()
+			if RayfieldCore.LoadConfiguration then RayfieldCore:LoadConfiguration() end
+		end)
 	end)
 
+	__voiduiLog("CreateWindow success")
 	return enhancedWindow
 end
 
@@ -887,11 +970,13 @@ EnhancedLib.IsVisible = RayfieldCore.IsVisible
 EnhancedLib.Destroy = RayfieldCore.Destroy
 
 function EnhancedLib:ModifyTheme(name)
+	__voiduiLog("ModifyTheme " .. tostring(name))
 	if name and ThemeManager:GetTheme(name) then ThemeManager:ApplyTheme(name) end
 	RayfieldCore:ModifyTheme(name or "Default")
 end
 
 function EnhancedLib:Notify(data)
+	__voiduiLog("Notify title=" .. tostring(data and data.Title))
 	RayfieldCore:Notify(data)
 end
 
