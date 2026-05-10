@@ -1,816 +1,426 @@
 -- ============================================================
 -- 	VOIDUI v2.0.0 — Premium Roblox UI Library
--- 	Based on Rayfield by Sirius
--- 	Fully self-contained — no external HTTP dependencies
+-- 	100% self-contained, zero external dependencies
 -- ============================================================
 -- 	Usage: loadstring(game:HttpGet("url"))()
 -- 	GitHub: https://github.com/joelsonp13/VoidUI
 -- ============================================================
 
 -- ═══════════════════════════════════════════════════════════════
--- 	BOOTSTRAP / DEBUG SYSTEM
--- ═══════════════════════════════════════════════════════════════
-
-local __VOIDUI_DEBUG = true
-local __voiduiSteps = 0
-
-local function _log(msg)
-	__voiduiSteps = __voiduiSteps + 1
-	local line = string.format("[VoidUI][%02d] %s", __voiduiSteps, tostring(msg))
-	print(line)
-	if __VOIDUI_DEBUG then
-		warn(line)
-	end
-end
-
-local function _err(where, msg)
-	warn(string.format("[VoidUI][ERRO] %s -> %s", tostring(where), tostring(msg)))
-end
-
-local function _safe(where, fn)
-	local ok, result = pcall(fn)
-	if not ok then
-		_err(where, result)
-		return false, result
-	end
-	return true, result
-end
-
-_log("Bootstrap iniciado")
-
--- ═══════════════════════════════════════════════════════════════
 -- 	SERVICES
 -- ═══════════════════════════════════════════════════════════════
 
-local function getService(name)
-	local service = game:GetService(name)
-	return if cloneref then cloneref(service) else service
-end
-
-local UserInputService = getService("UserInputService")
-local TweenService = getService("TweenService")
-local Players = getService("Players")
-local CoreGui = getService("CoreGui")
-local RunService = getService("RunService")
-local HttpService = getService("HttpService")
-local Lighting = getService("Lighting")
-
-_log("Services OK")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 
 -- ═══════════════════════════════════════════════════════════════
--- 	RAYFIELD CORE (EMBUTIDO)
--- 	Zero dependência externa — o source está aqui dentro
+-- 	WINDOW CORE (self-contained UI engine)
 -- ═══════════════════════════════════════════════════════════════
 
-_log("Carregando RayfieldCore embutido...")
+local WindowCore = {}
+local windowInstances = {}
+local windowCounter = 0
 
--- ============================================================
--- 	INÍCIO DO RAYFIELD CORE (source.lua embutido)
--- ============================================================
+function WindowCore:CreateWindow(config)
+	config = config or {}
+	windowCounter = windowCounter + 1
 
---[[
+	local windowId = "VoidUI_Window_" .. windowCounter
+	local windowTitle = config.Title or config.Name or "VoidUI"
+	local windowWidth = config.Width or 500
+	local windowHeight = config.Height or 475
+	local toggleKey = config.ToggleUIKeybind or config.ToggleKeybind or "K"
 
-	Rayfield Interface Suite
-	by Sirius
+	local gui = Instance.new("ScreenGui")
+	gui.Name = windowId; gui.DisplayOrder = 100; gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling; gui.ResetOnSpawn = false
+	gui.Parent = gethui and gethui() or CoreGui
 
-	shlex  | Designing + Programming
-	iRay   | Programming
-	Max    | Programming
-	Damian | Programming
+	local main = Instance.new("Frame")
+	main.Name = "Main"; main.Size = UDim2.new(0, windowWidth, 0, windowHeight); main.Position = UDim2.new(0.5, 0, 0.5, 0)
+	main.AnchorPoint = Vector2.new(0.5, 0.5); main.BackgroundColor3 = Color3.fromRGB(18, 18, 22); main.BorderSizePixel = 0; main.ClipsDescendants = true; main.Parent = gui
 
-]]
+	local mainCorner = Instance.new("UICorner"); mainCorner.CornerRadius = UDim.new(0, 12); mainCorner.Parent = main
+	local mainStroke = Instance.new("UIStroke"); mainStroke.Color = Color3.fromRGB(40, 40, 52); mainStroke.Thickness = 1; mainStroke.Parent = main
 
-local RayfieldCore
+	local shadow = Instance.new("ImageLabel")
+	shadow.Name = "Shadow"; shadow.Size = UDim2.new(1, 40, 1, 40); shadow.Position = UDim2.new(0, -20, 0, -20)
+	shadow.BackgroundTransparency = 1; shadow.Image = "rbxassetid://5587865193"; shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+	shadow.ImageTransparency = 0.6; shadow.ScaleType = Enum.ScaleType.Slice; shadow.SliceCenter = Rect.new(10, 10, 118, 118); shadow.ZIndex = -1; shadow.Parent = main
 
-do
-	-- try multiple known URLs for Rayfield source
-	local rayfieldSources = {}
+	local topbar = Instance.new("Frame")
+	topbar.Name = "Topbar"; topbar.Size = UDim2.new(1, 0, 0, 40); topbar.BackgroundColor3 = Color3.fromRGB(22, 22, 28); topbar.BorderSizePixel = 0; topbar.ZIndex = 10; topbar.Parent = main
 
-	-- Try to load from embedded file first (if available via readfile)
-	_safe("readfile RayfieldCore", function()
-		local path = "VoidUI/build/source_backup.lua"
-		if isfile and isfile(path) then
-			local content = readfile(path)
-			if content and #content > 1000 then
-				table.insert(rayfieldSources, 1, content)
-				_log("source_backup.lua loaded from filesystem (" .. #content .. " bytes)")
-			end
-		end
-	end)
+	local topbarCorner = Instance.new("UICorner"); topbarCorner.CornerRadius = UDim.new(0, 12, 0, 12, 0, 0); topbarCorner.Parent = topbar
 
-	-- Fallback: try URL
-	local urls = {
-		"https://sirius.menu/rayfield",
-		"https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua",
-		"https://raw.githubusercontent.com/shlexware/Rayfield/main/source",
-	}
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, -50, 1, 0); title.Position = UDim2.new(0, 14, 0, 0); title.BackgroundTransparency = 1
+	title.Font = Enum.Font.GothamSemibold; title.Text = windowTitle; title.TextColor3 = Color3.fromRGB(225, 225, 230)
+	title.TextSize = 15; title.TextXAlignment = Enum.TextXAlignment.Left; title.ZIndex = 11; title.Parent = topbar
 
-	for _, url in ipairs(urls) do
-		local ok, content = pcall(function()
-			return game:HttpGet(url)
+	local closeBtn = Instance.new("ImageButton")
+	closeBtn.Size = UDim2.new(0, 28, 0, 28); closeBtn.Position = UDim2.new(1, -36, 0.5, 0); closeBtn.AnchorPoint = Vector2.new(0, 0.5)
+	closeBtn.BackgroundTransparency = 1; closeBtn.Image = "rbxassetid://10137832201"; closeBtn.ImageColor3 = Color3.fromRGB(180, 180, 195); closeBtn.ZIndex = 12; closeBtn.Parent = topbar
+
+	local divider = Instance.new("Frame")
+	divider.Size = UDim2.new(1, 0, 0, 1); divider.Position = UDim2.new(0, 0, 1, 0); divider.BackgroundColor3 = Color3.fromRGB(40, 40, 52); divider.BorderSizePixel = 0; divider.Parent = topbar
+
+	local tabList = Instance.new("Frame")
+	tabList.Name = "TabList"; tabList.Size = UDim2.new(1, 0, 0, 34); tabList.Position = UDim2.new(0, 0, 0, 40)
+	tabList.BackgroundColor3 = Color3.fromRGB(14, 14, 18); tabList.BorderSizePixel = 0; tabList.ZIndex = 5; tabList.Parent = main
+
+	local tabListPadding = Instance.new("UIPadding"); tabListPadding.PaddingLeft = UDim.new(0, 6); tabListPadding.Parent = tabList
+	local tabListLayout = Instance.new("UIListLayout"); tabListLayout.FillDirection = Enum.FillDirection.Horizontal; tabListLayout.Padding = UDim.new(0, 4); tabListLayout.VerticalAlignment = Enum.VerticalAlignment.Center; tabListLayout.Parent = tabList
+
+	local content = Instance.new("Frame")
+	content.Name = "Content"; content.Size = UDim2.new(1, 0, 1, -74); content.Position = UDim2.new(0, 0, 0, 74)
+	content.BackgroundTransparency = 1; content.ClipsDescendants = true; content.Parent = main
+
+	local pageLayout = Instance.new("Frame"); pageLayout.Size = UDim2.new(1, 0, 1, 0); pageLayout.BackgroundTransparency = 1; pageLayout.Parent = content
+
+	-- Draggable
+	local dragging = false; local dragOffset
+	topbar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; dragOffset = i.Position - main.AbsolutePosition end end)
+	UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+	RunService.RenderStepped:Connect(function() if dragging then local m = UserInputService:GetMouseLocation(); main.Position = UDim2.fromOffset(m.X - dragOffset.X, m.Y - dragOffset.Y) end end)
+
+	-- Toggle visibility
+	local hidden = false
+	closeBtn.MouseButton1Click:Connect(function() hidden = not hidden; main.Visible = not hidden end)
+	UserInputService.InputBegan:Connect(function(i, p) if p then return end; if i.KeyCode == Enum.KeyCode[toggleKey] then hidden = not hidden; main.Visible = not hidden end end)
+
+	local window = { Id = windowId, Gui = gui, Main = main, Topbar = topbar, TabList = tabList, Content = pageLayout, Tabs = {}, ActiveTab = nil }
+	local tabIdx = 0
+
+	function window:CreateTab(name)
+		tabIdx = tabIdx + 1
+		local tabBtn = Instance.new("TextButton")
+		tabBtn.Name = "TabBtn_" .. name; tabBtn.Size = UDim2.new(0, 80, 0, 26)
+		tabBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45); tabBtn.BackgroundTransparency = 0.3; tabBtn.Text = "  " .. name
+		tabBtn.Font = Enum.Font.Gotham; tabBtn.TextColor3 = Color3.fromRGB(180, 180, 190); tabBtn.TextSize = 12; tabBtn.AutoButtonColor = false; tabBtn.ZIndex = 6; tabBtn.Parent = self.TabList
+		local btnCorner = Instance.new("UICorner"); btnCorner.CornerRadius = UDim.new(0, 6); btnCorner.Parent = tabBtn
+
+		local tabPage = Instance.new("ScrollingFrame")
+		tabPage.Name = "Page_" .. name; tabPage.Size = UDim2.new(1, 0, 1, 0); tabPage.BackgroundTransparency = 1
+		tabPage.ScrollBarThickness = 4; tabPage.ScrollBarImageColor3 = Color3.fromRGB(40, 40, 52); tabPage.BorderSizePixel = 0; tabPage.CanvasSize = UDim2.new(0, 0, 0, 0)
+		tabPage.Visible = tabIdx == 1; tabPage.Parent = self.Content
+
+		local list = Instance.new("UIListLayout"); list.Padding = UDim.new(0, 4); list.SortOrder = Enum.SortOrder.LayoutOrder; list.Parent = tabPage
+		local pad = Instance.new("UIPadding"); pad.PaddingTop = UDim.new(0, 8); pad.PaddingLeft = UDim.new(0, 5); pad.PaddingRight = UDim.new(0, 5); pad.Parent = tabPage
+
+		if tabIdx == 1 then tabBtn.BackgroundTransparency = 0; tabBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 70); tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255) end
+
+		tabBtn.MouseButton1Click:Connect(function()
+			for _, b in ipairs(self.TabList:GetChildren()) do if b:IsA("TextButton") then b.BackgroundTransparency = 0.3; b.BackgroundColor3 = Color3.fromRGB(35, 35, 45); b.TextColor3 = Color3.fromRGB(180, 180, 190) end end
+			for _, p in ipairs(self.Content:GetChildren()) do if p:IsA("ScrollingFrame") then p.Visible = false end end
+			tabBtn.BackgroundTransparency = 0; tabBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 70); tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255); tabPage.Visible = true
 		end)
-		if ok and type(content) == "string" and #content > 1000 then
-			table.insert(rayfieldSources, content)
-			_log("RayfieldCore downloaded: " .. url .. " (" .. #content .. " bytes)")
-			break
-		else
-			_log("URL failed: " .. url .. " -> " .. tostring(content))
+
+		local function updateCanvas()
+			local h = 0
+			for _, c in ipairs(tabPage:GetChildren()) do if c:IsA("Frame") or c:IsA("TextButton") then h = h + c.AbsoluteSize.Y + 4 end end
+			tabPage.CanvasSize = UDim2.new(0, 0, 0, h + 20)
 		end
-	end
 
-	-- Compile and execute
-	local rayfieldSource = rayfieldSources[1]
-	if not rayfieldSource or #rayfieldSource < 1000 then
-		-- Final fallback: minimal Rayfield-compatible stub
-		_log("No Rayfield source available — using fallback stub")
-		rayfieldSource = [[
-			local RayfieldStub = { Flags = {}, Theme = { Default = {} } }
-			function RayfieldStub:CreateWindow(c)
-				local w = {}
-				function w:CreateTab(n, i) local t = {}
-					function t:CreateSection(s) end
-					function t:CreateButton(c) end
-					function t:CreateToggle(c) return c end
-					function t:CreateSlider(c) return c end
-					function t:CreateInput(c) return c end
-					function t:CreateDropdown(c) return c end
-					function t:CreateKeybind(c) return c end
-					function t:CreateColorPicker(c) return c end
-					function t:CreateLabel(t) end
-					function t:CreateParagraph(c) end
-					function t:CreateDivider() end
-				return t end
-				function w:ModifyTheme(t) end
-				return w
-			end
-			function RayfieldStub:Notify(d) print("Notify:", d.Title) end
-			function RayfieldStub:LoadConfiguration() end
-			function RayfieldStub:SetVisibility(v) end
-			function RayfieldStub:IsVisible() return true end
-			function RayfieldStub:Destroy() end
-			return RayfieldStub
-		]]
-	end
+		local tab = { Button = tabBtn, Page = tabPage, el = 0 }
 
-	local compiler = rawget(_G, "loadstring") or rawget(_G, "load")
-	if not compiler then
-		local ok, env = pcall(getgenv or function() return _G end)
-		if ok and type(env) == "table" then
-			compiler = env.loadstring or env.load
+		function tab:Section(name)
+			self.el = self.el + 1
+			local s = Instance.new("Frame"); s.Size = UDim2.new(1, 0, 0, 22); s.BackgroundTransparency = 1; s.BorderSizePixel = 0; s.LayoutOrder = self.el; s.Parent = self.Page
+			local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, -10, 1, 0); l.BackgroundTransparency = 1; l.Font = Enum.Font.GothamSemibold; l.Text = name:upper(); l.TextColor3 = Color3.fromRGB(110, 110, 125); l.TextSize = 11; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = s
+			updateCanvas(); return { Set = function(_, n) l.Text = n:upper() end }
 		end
+
+		function tab:Toggle(c)
+			c = c or {}; self.el = self.el + 1
+			local f = Instance.new("Frame"); f.Size = UDim2.new(1, 0, 0, 42); f.BackgroundColor3 = Color3.fromRGB(28, 28, 36); f.BorderSizePixel = 0; f.LayoutOrder = self.el; f.Parent = self.Page
+			local fc = Instance.new("UICorner"); fc.CornerRadius = UDim.new(0, 8); fc.Parent = f
+			local fs = Instance.new("UIStroke"); fs.Color = Color3.fromRGB(48, 48, 58); fs.Thickness = 1; fs.Parent = f
+			local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, -70, 1, 0); l.Position = UDim2.new(0, 14, 0, 0); l.BackgroundTransparency = 1; l.Font = Enum.Font.Gotham; l.Text = c.Name or "Toggle"; l.TextColor3 = Color3.fromRGB(220, 220, 230); l.TextSize = 14; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = f
+			local tr = Instance.new("Frame"); tr.Size = UDim2.new(0, 44, 0, 24); tr.Position = UDim2.new(1, -58, 0.5, 0); tr.AnchorPoint = Vector2.new(0, 0.5); tr.BackgroundColor3 = Color3.fromRGB(55, 55, 68); tr.BorderSizePixel = 0; tr.Parent = f
+			local tc = Instance.new("UICorner"); tc.CornerRadius = UDim.new(0, 12); tc.Parent = tr
+			local kn = Instance.new("Frame"); kn.Size = UDim2.new(0, 18, 0, 18); kn.Position = UDim2.new(0, 3, 0.5, 0); kn.AnchorPoint = Vector2.new(0, 0.5); kn.BackgroundColor3 = Color3.fromRGB(200, 200, 210); kn.BorderSizePixel = 0; kn.ZIndex = 2; kn.Parent = tr
+			local kc = Instance.new("UICorner"); kc.CornerRadius = UDim.new(0, 9); kc.Parent = kn
+			local ib = Instance.new("TextButton"); ib.Size = UDim2.new(1, 0, 1, 0); ib.BackgroundTransparency = 1; ib.Text = ""; ib.ZIndex = 10; ib.Parent = f
+			local state = c.CurrentValue or c.Default or false; local cb = c.Callback or function() end
+			local function us(s) state = s; if s then tr.BackgroundColor3 = Color3.fromRGB(88, 130, 255); TweenService:Create(kn, TweenInfo.new(0.25), {Position = UDim2.new(1, -21, 0.5, 0)}):Play() else tr.BackgroundColor3 = Color3.fromRGB(55, 55, 68); TweenService:Create(kn, TweenInfo.new(0.25), {Position = UDim2.new(0, 3, 0.5, 0)}):Play() end; cb(state) end
+			ib.MouseButton1Click:Connect(function() us(not state) end)
+			if state then kn.Position = UDim2.new(1, -21, 0.5, 0); tr.BackgroundColor3 = Color3.fromRGB(88, 130, 255) end
+			updateCanvas()
+			local o = {}; function o:Set(v) us(v) end; function o:Get() return state end; function o:Toggle() us(not state) end; return o
+		end
+
+		function tab:Button(c)
+			c = c or {}; self.el = self.el + 1
+			local b = Instance.new("TextButton"); b.Size = UDim2.new(1, 0, 0, 38); b.BackgroundColor3 = Color3.fromRGB(35, 35, 45); b.Text = c.Name or "Button"; b.Font = Enum.Font.GothamSemibold; b.TextColor3 = Color3.fromRGB(220, 220, 230); b.TextSize = 14; b.AutoButtonColor = false; b.LayoutOrder = self.el; b.Parent = self.Page
+			local bc = Instance.new("UICorner"); bc.CornerRadius = UDim.new(0, 8); bc.Parent = b
+			local bs = Instance.new("UIStroke"); bs.Color = Color3.fromRGB(50, 50, 62); bs.Thickness = 1; bs.Parent = b
+			b.MouseEnter:Connect(function() TweenService:Create(b, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(42, 42, 54)}):Play() end)
+			b.MouseLeave:Connect(function() TweenService:Create(b, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(35, 35, 45)}):Play() end)
+			if c.Callback then b.MouseButton1Click:Connect(function() pcall(c.Callback) end) end
+			updateCanvas(); return { Set = function(_, t) b.Text = t end }
+		end
+
+		function tab:Slider(c)
+			c = c or {}; self.el = self.el + 1
+			local mn = (c.Range or {0,100})[1]; local mx = (c.Range or {0,100})[2]; local v = c.CurrentValue or c.Default or mn; local sf = c.Suffix or ""
+			local f = Instance.new("Frame"); f.Size = UDim2.new(1, 0, 0, 50); f.BackgroundColor3 = Color3.fromRGB(28, 28, 36); f.BorderSizePixel = 0; f.LayoutOrder = self.el; f.Parent = self.Page
+			local fc = Instance.new("UICorner"); fc.CornerRadius = UDim.new(0, 8); fc.Parent = f
+			local fs = Instance.new("UIStroke"); fs.Color = Color3.fromRGB(48, 48, 58); fs.Thickness = 1; fs.Parent = f
+			local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, -80, 0, 18); l.Position = UDim2.new(0, 14, 0, 8); l.BackgroundTransparency = 1; l.Font = Enum.Font.Gotham; l.Text = c.Name or "Slider"; l.TextColor3 = Color3.fromRGB(220, 220, 230); l.TextSize = 13; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = f
+			local vl = Instance.new("TextLabel"); vl.Size = UDim2.new(0, 60, 0, 18); vl.Position = UDim2.new(1, -74, 0, 8); vl.BackgroundTransparency = 1; vl.Font = Enum.Font.GothamSemibold; vl.Text = tostring(v) .. " " .. sf; vl.TextColor3 = Color3.fromRGB(140, 140, 155); vl.TextSize = 12; vl.TextXAlignment = Enum.TextXAlignment.Right; vl.Parent = f
+			updateCanvas(); return { Set = function(_, nv) v = nv; vl.Text = tostring(nv) .. " " .. sf end }
+		end
+
+		function tab:Dropdown(c)
+			c = c or {}; self.el = self.el + 1
+			local f = Instance.new("Frame"); f.Size = UDim2.new(1, 0, 0, 42); f.BackgroundColor3 = Color3.fromRGB(28, 28, 36); f.BorderSizePixel = 0; f.ClipsDescendants = true; f.LayoutOrder = self.el; f.Parent = self.Page
+			local fc = Instance.new("UICorner"); fc.CornerRadius = UDim.new(0, 8); fc.Parent = f
+			local fs = Instance.new("UIStroke"); fs.Color = Color3.fromRGB(48, 48, 58); fs.Thickness = 1; fs.Parent = f
+			local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, -40, 1, 0); l.Position = UDim2.new(0, 14, 0, 0); l.BackgroundTransparency = 1; l.Font = Enum.Font.Gotham; l.Text = c.Name or "Dropdown"; l.TextColor3 = Color3.fromRGB(220, 220, 230); l.TextSize = 14; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = f
+			updateCanvas(); return { Set = function(_, opts) end }
+		end
+
+		function tab:Input(c)
+			c = c or {}; self.el = self.el + 1
+			local f = Instance.new("Frame"); f.Size = UDim2.new(1, 0, 0, 42); f.BackgroundColor3 = Color3.fromRGB(28, 28, 36); f.BorderSizePixel = 0; f.LayoutOrder = self.el; f.Parent = self.Page
+			local fc = Instance.new("UICorner"); fc.CornerRadius = UDim.new(0, 8); fc.Parent = f
+			local fs = Instance.new("UIStroke"); fs.Color = Color3.fromRGB(48, 48, 58); fs.Thickness = 1; fs.Parent = f
+			local l = Instance.new("TextLabel"); l.Size = UDim2.new(0, 120, 1, 0); l.Position = UDim2.new(0, 14, 0, 0); l.BackgroundTransparency = 1; l.Font = Enum.Font.Gotham; l.Text = c.Name or "Input"; l.TextColor3 = Color3.fromRGB(220, 220, 230); l.TextSize = 13; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = f
+			local ib = Instance.new("TextBox"); ib.Size = UDim2.new(0, 140, 0, 28); ib.Position = UDim2.new(1, -154, 0.5, 0); ib.AnchorPoint = Vector2.new(0, 0.5); ib.BackgroundColor3 = Color3.fromRGB(22, 22, 30); ib.Font = Enum.Font.Gotham; ib.Text = c.CurrentValue or c.Default or ""; ib.TextColor3 = Color3.fromRGB(220, 220, 230); ib.TextSize = 13; ib.PlaceholderText = c.Placeholder or "Type..."; ib.PlaceholderColor3 = Color3.fromRGB(100, 100, 115); ib.ZIndex = 2; ib.Parent = f
+			local ic = Instance.new("UICorner"); ic.CornerRadius = UDim.new(0, 6); ic.Parent = ib
+			updateCanvas()
+			local o = { CurrentValue = c.CurrentValue or c.Default or "" }; local cb = c.Callback or function() end
+			ib.FocusLost:Connect(function() o.CurrentValue = ib.Text; cb(ib.Text) end)
+			function o:Set(t) ib.Text = t; o.CurrentValue = t end; return o
+		end
+
+		function tab:Keybind(c)
+			c = c or {}; self.el = self.el + 1
+			local f = Instance.new("Frame"); f.Size = UDim2.new(1, 0, 0, 42); f.BackgroundColor3 = Color3.fromRGB(28, 28, 36); f.BorderSizePixel = 0; f.LayoutOrder = self.el; f.Parent = self.Page
+			local fc = Instance.new("UICorner"); fc.CornerRadius = UDim.new(0, 8); fc.Parent = f
+			local fs = Instance.new("UIStroke"); fs.Color = Color3.fromRGB(48, 48, 58); fs.Thickness = 1; fs.Parent = f
+			local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, -60, 1, 0); l.Position = UDim2.new(0, 14, 0, 0); l.BackgroundTransparency = 1; l.Font = Enum.Font.Gotham; l.Text = c.Name or "Keybind"; l.TextColor3 = Color3.fromRGB(220, 220, 230); l.TextSize = 14; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = f
+			updateCanvas(); return { CurrentKeybind = c.CurrentKeybind or c.Default or "F", Set = function(_, k) end }
+		end
+
+		function tab:ColorPicker(c)
+			c = c or {}; self.el = self.el + 1
+			local f = Instance.new("Frame"); f.Size = UDim2.new(1, 0, 0, 42); f.BackgroundColor3 = Color3.fromRGB(28, 28, 36); f.BorderSizePixel = 0; f.LayoutOrder = self.el; f.Parent = self.Page
+			local fc = Instance.new("UICorner"); fc.CornerRadius = UDim.new(0, 8); fc.Parent = f
+			local fs = Instance.new("UIStroke"); fs.Color = Color3.fromRGB(48, 48, 58); fs.Thickness = 1; fs.Parent = f
+			local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, -60, 1, 0); l.Position = UDim2.new(0, 14, 0, 0); l.BackgroundTransparency = 1; l.Font = Enum.Font.Gotham; l.Text = c.Name or "Color"; l.TextColor3 = Color3.fromRGB(220, 220, 230); l.TextSize = 14; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = f
+			updateCanvas(); return { Color = c.Color or c.Default or Color3.fromRGB(255,255,255), Set = function(_, cl) end }
+		end
+
+		function tab:Label(text, icon, color)
+			self.el = self.el + 1
+			local f = Instance.new("Frame"); f.Size = UDim2.new(1, 0, 0, 32); f.BackgroundColor3 = color or Color3.fromRGB(25, 25, 32); f.BorderSizePixel = 0; f.LayoutOrder = self.el; f.Parent = self.Page
+			local fc = Instance.new("UICorner"); fc.CornerRadius = UDim.new(0, 6); fc.Parent = f
+			local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, -14, 1, 0); l.Position = UDim2.new(0, 7, 0, 0); l.BackgroundTransparency = 1; l.Font = Enum.Font.Gotham; l.Text = text or ""; l.TextColor3 = Color3.fromRGB(200, 200, 215); l.TextSize = 13; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = f
+			updateCanvas(); return { Set = function(_, t) l.Text = t end }
+		end
+
+		function tab:Paragraph(c)
+			c = c or {}; self.el = self.el + 1
+			local f = Instance.new("Frame"); f.Size = UDim2.new(1, 0, 0, 60); f.BackgroundColor3 = Color3.fromRGB(25, 25, 32); f.BorderSizePixel = 0; f.LayoutOrder = self.el; f.Parent = self.Page
+			local fc = Instance.new("UICorner"); fc.CornerRadius = UDim.new(0, 6); fc.Parent = f
+			local t = Instance.new("TextLabel"); t.Size = UDim2.new(1, -14, 0, 18); t.Position = UDim2.new(0, 7, 0, 6); t.BackgroundTransparency = 1; t.Font = Enum.Font.GothamSemibold; t.Text = c.Title or ""; t.TextColor3 = Color3.fromRGB(220, 220, 230); t.TextSize = 14; t.TextXAlignment = Enum.TextXAlignment.Left; t.Parent = f
+			local ct = Instance.new("TextLabel"); ct.Size = UDim2.new(1, -14, 0, 30); ct.Position = UDim2.new(0, 7, 0, 26); ct.BackgroundTransparency = 1; ct.Font = Enum.Font.Gotham; ct.Text = c.Content or ""; ct.TextColor3 = Color3.fromRGB(160, 160, 175); ct.TextSize = 12; ct.TextXAlignment = Enum.TextXAlignment.Left; ct.TextWrapped = true; ct.Parent = f
+			updateCanvas(); return { Set = function(_, nc) ct.Text = nc.Content end }
+		end
+
+		function tab:Divider()
+			self.el = self.el + 1
+			local d = Instance.new("Frame"); d.Size = UDim2.new(1, -10, 0, 1); d.BackgroundColor3 = Color3.fromRGB(50, 50, 62); d.BorderSizePixel = 0; d.LayoutOrder = self.el; d.Parent = self.Page
+			updateCanvas(); return { Set = function(_, v) d.Visible = v end }
+		end
+
+		table.insert(self.Tabs, tab); return tab
 	end
 
-	if type(compiler) ~= "function" then
-		compiler = loadstring or load
-	end
+	function window:ModifyTheme(name) end
 
-	if type(compiler) ~= "function" then
-		error("[VoidUI] CRITICO: nenhum loadstring/load disponivel neste executor")
-	end
-
-	local chunk, compileErr = compiler(rayfieldSource, "@RayfieldCore")
-	if type(chunk) ~= "function" then
-		error("[VoidUI] CRITICO: falha ao compilar RayfieldCore: " .. tostring(compileErr))
-	end
-
-	local ok, result = pcall(chunk)
-	if not ok or type(result) ~= "table" then
-		error("[VoidUI] CRITICO: falha ao executar RayfieldCore: " .. tostring(result))
-	end
-
-	RayfieldCore = result
-	_log("RayfieldCore carregado com sucesso!")
+	table.insert(windowInstances, window); return window
 end
 
--- ============================================================
--- 	FIM DO RAYFIELD CORE
--- ============================================================
+function WindowCore:Notify(data)
+	data = data or {}
+	if data.Title or data.Content then
+		warn("[VoidUI]", data.Title or "", data.Content or "")
+	end
+end
+function WindowCore:LoadConfiguration() end
+
+function WindowCore:SetVisibility(v)
+	for _, w in ipairs(windowInstances) do w.Main.Visible = v end
+end
+function WindowCore:IsVisible()
+	for _, w in ipairs(windowInstances) do if w.Main.Visible then return true end end; return false
+end
+function WindowCore:Destroy()
+	for _, w in ipairs(windowInstances) do pcall(function() w.Gui:Destroy() end) end; table.clear(windowInstances)
+end
 
 -- ═══════════════════════════════════════════════════════════════
--- 	VOIDUI ENHANCED MODULES
+-- 	VOIDUI MODULES
 -- ═══════════════════════════════════════════════════════════════
 
-_log("Carregando modulos VoidUI...")
-
--- 1. Signals
-local Signals = {}
-local SignalMT = {}
-SignalMT.__index = SignalMT
-function Signals.new()
-	return setmetatable({_listeners = {}, _connected = true}, SignalMT)
-end
-function SignalMT:Connect(cb)
-	if not self._connected then return nil end
-	local conn = {Callback = cb, Connected = true}
-	table.insert(self._listeners, conn)
-	return {Disconnect = function()
-		conn.Connected = false
-		for i, v in ipairs(self._listeners) do if v == conn then table.remove(self._listeners, i) return end end
-	end}
-end
-function SignalMT:Once(cb)
-	local wrap; wrap = function(...) cb(...) end
-	return self:Connect(wrap)
-end
-function SignalMT:Fire(...)
-	if not self._connected then return end
-	for _, l in ipairs(self._listeners) do if l.Connected then task.spawn(l.Callback, ...) end end
-end
-function SignalMT:Destroy() table.clear(self._listeners); self._connected = false end
-
--- 2. Event Manager
-local EventManager = {_events = {}, _counter = 0}
-EventManager.Events = {
-	WindowCreated = "window_created", WindowDestroyed = "window_destroyed",
-	TabChanged = "tab_changed", ThemeChanged = "theme_changed",
-	ConfigLoaded = "config_loaded", ConfigSaved = "config_saved",
-	Notify = "notify", BeforeRender = "before_render", AfterRender = "after_render"
-}
-function EventManager:On(name, cb)
-	if not self._events[name] then self._events[name] = {} end
-	self._counter = self._counter + 1; local id = self._counter
-	table.insert(self._events[name], {Id = id, Callback = cb}); return id
-end
-function EventManager:Emit(name, ...)
-	if not self._events[name] then return end
-	for _, l in ipairs(self._events[name]) do task.spawn(l.Callback, ...) end
-end
-
--- 3. Performance (Pooling)
-local Performance = {}
-local Pools = {}
-function Performance:CreatePool(name, factory, reset, size)
-	size = size or 5; Pools[name] = {Factory = factory, Reset = reset, Items = {}}
-	for i = 1, size do table.insert(Pools[name].Items, factory()) end
-	return Pools[name]
-end
-function Performance:Get(name, ...)
-	local pool = Pools[name]; if not pool then return nil end
-	local item = table.remove(pool.Items)
-	if not item then item = pool.Factory(...) elseif pool.Reset then pool.Reset(item, ...) end
-	return item
-end
-function Performance:Return(name, item)
-	local pool = Pools[name]; if pool then table.insert(pool.Items, item) end
-end
-function Performance:Batch(id, fn)
-	if not self._batched then self._batched = {} end
-	if not self._batched[id] then
-		self._batched[id] = fn
-		task.spawn(function() task.wait() if self._batched[id] then pcall(self._batched[id]); self._batched[id] = nil end end)
-	end
-end
-
--- 4. Rendering (FPS)
-local Rendering = {}
-local frameTime = 0; local fps = 60
-RunService.RenderStepped:Connect(function(dt) frameTime = dt; fps = 1 / dt end)
-function Rendering:GetFPS() return math.floor(fps) end
-function Rendering:GetFrameTime() return frameTime * 1000 end
-function Rendering:Defer(fn, prio)
-	prio = prio or 0
-	task.spawn(function() pcall(fn) end)
-end
-
--- 5. Theme Manager (8 Themes)
-local ThemeManager = {_current = nil, _currentName = "Default", _listeners = {}, _customThemes = {}}
+-- Theme Manager
+local ThemeManager = { _current = nil, _currentName = "Default", _listeners = {}, _customThemes = {} }
 local Themes = {}
-
-Themes.Default = {
-	Text = Color3.fromRGB(225,225,230), TextSecondary = Color3.fromRGB(140,140,150),
-	Background = Color3.fromRGB(18,18,22), BackgroundSecondary = Color3.fromRGB(24,24,30),
-	Surface = Color3.fromRGB(32,32,40), SurfaceHover = Color3.fromRGB(38,38,48),
-	Topbar = Color3.fromRGB(22,22,28), TopbarText = Color3.fromRGB(225,225,230),
-	Tab = Color3.fromRGB(40,40,50), TabHover = Color3.fromRGB(50,50,62), TabActive = Color3.fromRGB(60,60,75),
-	TabText = Color3.fromRGB(180,180,190), TabTextActive = Color3.fromRGB(255,255,255),
-	Element = Color3.fromRGB(28,28,36), ElementHover = Color3.fromRGB(34,34,44),
-	ElementStroke = Color3.fromRGB(48,48,58),
-	Accent = Color3.fromRGB(88,130,255), AccentHover = Color3.fromRGB(108,148,255),
-	Success = Color3.fromRGB(45,200,120), Warning = Color3.fromRGB(255,180,50),
-	Error = Color3.fromRGB(235,80,80), Info = Color3.fromRGB(60,160,230),
-	ToggleEnabled = Color3.fromRGB(88,130,255), ToggleDisabled = Color3.fromRGB(60,60,70),
-	SliderProgress = Color3.fromRGB(88,130,255),
-	Input = Color3.fromRGB(24,24,32), InputStroke = Color3.fromRGB(55,55,65),
-	InputFocus = Color3.fromRGB(88,130,255), Placeholder = Color3.fromRGB(100,100,110),
-}
-
-Themes.Midnight = {
-	Text = Color3.fromRGB(200,200,210), TextSecondary = Color3.fromRGB(120,120,130),
-	Background = Color3.fromRGB(10,10,14), BackgroundSecondary = Color3.fromRGB(15,16,22),
-	Surface = Color3.fromRGB(22,23,32), SurfaceHover = Color3.fromRGB(28,30,40),
-	Topbar = Color3.fromRGB(14,15,20), TopbarText = Color3.fromRGB(200,200,210),
-	Tab = Color3.fromRGB(30,32,42), TabHover = Color3.fromRGB(38,40,52), TabActive = Color3.fromRGB(48,50,65),
-	TabText = Color3.fromRGB(150,150,165), TabTextActive = Color3.fromRGB(220,220,230),
-	Element = Color3.fromRGB(20,21,28), ElementHover = Color3.fromRGB(26,28,36),
-	ElementStroke = Color3.fromRGB(40,42,52),
-	Accent = Color3.fromRGB(100,120,255), AccentHover = Color3.fromRGB(120,140,255),
-	Success = Color3.fromRGB(35,180,100), Warning = Color3.fromRGB(230,160,40),
-	Error = Color3.fromRGB(220,60,60), Info = Color3.fromRGB(50,140,220),
-	ToggleEnabled = Color3.fromRGB(100,120,255), ToggleDisabled = Color3.fromRGB(50,52,62),
-	SliderProgress = Color3.fromRGB(100,120,255),
-	Input = Color3.fromRGB(18,19,26), InputStroke = Color3.fromRGB(45,47,58),
-	InputFocus = Color3.fromRGB(100,120,255), Placeholder = Color3.fromRGB(80,80,95),
-}
-
-Themes.AMOLED = {
-	Text = Color3.fromRGB(200,200,210), TextSecondary = Color3.fromRGB(100,100,110),
-	Background = Color3.fromRGB(0,0,0), BackgroundSecondary = Color3.fromRGB(5,5,8),
-	Surface = Color3.fromRGB(12,12,16), SurfaceHover = Color3.fromRGB(18,18,24),
-	Topbar = Color3.fromRGB(0,0,0), TopbarText = Color3.fromRGB(200,200,210),
-	Tab = Color3.fromRGB(18,18,24), TabHover = Color3.fromRGB(26,26,34), TabActive = Color3.fromRGB(34,34,46),
-	TabText = Color3.fromRGB(130,130,145), TabTextActive = Color3.fromRGB(220,220,230),
-	Element = Color3.fromRGB(10,10,14), ElementHover = Color3.fromRGB(16,16,22),
-	ElementStroke = Color3.fromRGB(30,30,40),
-	Accent = Color3.fromRGB(80,140,255), AccentHover = Color3.fromRGB(100,160,255),
-	Success = Color3.fromRGB(30,170,90), Warning = Color3.fromRGB(220,150,30),
-	Error = Color3.fromRGB(210,50,50), Info = Color3.fromRGB(40,130,210),
-	ToggleEnabled = Color3.fromRGB(80,140,255), ToggleDisabled = Color3.fromRGB(40,40,52),
-	SliderProgress = Color3.fromRGB(80,140,255),
-	Input = Color3.fromRGB(8,8,12), InputStroke = Color3.fromRGB(35,35,46),
-	InputFocus = Color3.fromRGB(80,140,255), Placeholder = Color3.fromRGB(65,65,80),
-}
-
-Themes.Neon = {
-	Text = Color3.fromRGB(220,220,240), TextSecondary = Color3.fromRGB(150,150,180),
-	Background = Color3.fromRGB(10,8,20), BackgroundSecondary = Color3.fromRGB(15,12,28),
-	Surface = Color3.fromRGB(22,18,38), SurfaceHover = Color3.fromRGB(28,24,46),
-	Topbar = Color3.fromRGB(14,10,26), TopbarText = Color3.fromRGB(220,220,240),
-	Tab = Color3.fromRGB(32,26,50), TabHover = Color3.fromRGB(40,34,60), TabActive = Color3.fromRGB(50,42,72),
-	TabText = Color3.fromRGB(160,150,190), TabTextActive = Color3.fromRGB(255,255,255),
-	Element = Color3.fromRGB(18,14,32), ElementHover = Color3.fromRGB(24,20,40),
-	ElementStroke = Color3.fromRGB(42,36,60),
-	Accent = Color3.fromRGB(130,60,255), AccentHover = Color3.fromRGB(150,80,255),
-	Success = Color3.fromRGB(35,200,120), Warning = Color3.fromRGB(255,170,40),
-	Error = Color3.fromRGB(230,60,80), Info = Color3.fromRGB(50,140,240),
-	ToggleEnabled = Color3.fromRGB(130,60,255), ToggleDisabled = Color3.fromRGB(52,46,70),
-	SliderProgress = Color3.fromRGB(130,60,255),
-	Input = Color3.fromRGB(16,12,30), InputStroke = Color3.fromRGB(48,40,68),
-	InputFocus = Color3.fromRGB(130,60,255), Placeholder = Color3.fromRGB(90,80,120),
-}
-
-Themes.Cyberpunk = {
-	Text = Color3.fromRGB(230,230,200), TextSecondary = Color3.fromRGB(180,180,130),
-	Background = Color3.fromRGB(10,8,6), BackgroundSecondary = Color3.fromRGB(16,13,10),
-	Surface = Color3.fromRGB(24,20,16), SurfaceHover = Color3.fromRGB(30,26,22),
-	Topbar = Color3.fromRGB(14,11,8), TopbarText = Color3.fromRGB(230,230,200),
-	Tab = Color3.fromRGB(34,28,22), TabHover = Color3.fromRGB(42,36,28), TabActive = Color3.fromRGB(52,44,34),
-	TabText = Color3.fromRGB(170,160,130), TabTextActive = Color3.fromRGB(255,240,180),
-	Element = Color3.fromRGB(20,16,12), ElementHover = Color3.fromRGB(26,22,18),
-	ElementStroke = Color3.fromRGB(44,38,30),
-	Accent = Color3.fromRGB(255,180,30), AccentHover = Color3.fromRGB(255,200,60),
-	Success = Color3.fromRGB(50,200,100), Warning = Color3.fromRGB(255,140,20),
-	Error = Color3.fromRGB(230,50,50), Info = Color3.fromRGB(40,160,220),
-	ToggleEnabled = Color3.fromRGB(255,180,30), ToggleDisabled = Color3.fromRGB(54,48,42),
-	SliderProgress = Color3.fromRGB(255,180,30),
-	Input = Color3.fromRGB(18,14,10), InputStroke = Color3.fromRGB(50,44,36),
-	InputFocus = Color3.fromRGB(255,180,30), Placeholder = Color3.fromRGB(110,100,80),
-}
-
-Themes.Glass = {
-	Text = Color3.fromRGB(230,230,240), TextSecondary = Color3.fromRGB(160,160,180),
-	Background = Color3.fromRGB(12,14,24), BackgroundSecondary = Color3.fromRGB(18,20,32),
-	Surface = Color3.fromRGB(26,28,42), SurfaceHover = Color3.fromRGB(32,34,50),
-	Topbar = Color3.fromRGB(16,18,28), TopbarText = Color3.fromRGB(230,230,240),
-	Tab = Color3.fromRGB(36,38,54), TabHover = Color3.fromRGB(44,46,64), TabActive = Color3.fromRGB(54,56,76),
-	TabText = Color3.fromRGB(170,170,190), TabTextActive = Color3.fromRGB(255,255,255),
-	Element = Color3.fromRGB(22,24,36), ElementHover = Color3.fromRGB(28,30,44),
-	ElementStroke = Color3.fromRGB(46,48,64),
-	Accent = Color3.fromRGB(100,150,255), AccentHover = Color3.fromRGB(120,170,255),
-	Success = Color3.fromRGB(45,200,120), Warning = Color3.fromRGB(255,180,50),
-	Error = Color3.fromRGB(235,80,80), Info = Color3.fromRGB(60,160,230),
-	ToggleEnabled = Color3.fromRGB(100,150,255), ToggleDisabled = Color3.fromRGB(56,58,74),
-	SliderProgress = Color3.fromRGB(100,150,255),
-	Input = Color3.fromRGB(20,22,34), InputStroke = Color3.fromRGB(50,52,70),
-	InputFocus = Color3.fromRGB(100,150,255), Placeholder = Color3.fromRGB(100,100,120),
-}
-
-Themes.Purple = {
-	Text = Color3.fromRGB(230,225,240), TextSecondary = Color3.fromRGB(170,160,190),
-	Background = Color3.fromRGB(20,16,30), BackgroundSecondary = Color3.fromRGB(26,22,38),
-	Surface = Color3.fromRGB(36,30,50), SurfaceHover = Color3.fromRGB(42,36,58),
-	Topbar = Color3.fromRGB(24,20,36), TopbarText = Color3.fromRGB(230,225,240),
-	Tab = Color3.fromRGB(44,38,60), TabHover = Color3.fromRGB(52,46,70), TabActive = Color3.fromRGB(62,54,82),
-	TabText = Color3.fromRGB(180,170,200), TabTextActive = Color3.fromRGB(255,255,255),
-	Element = Color3.fromRGB(30,26,44), ElementHover = Color3.fromRGB(36,32,52),
-	ElementStroke = Color3.fromRGB(50,44,66),
-	Accent = Color3.fromRGB(160,80,255), AccentHover = Color3.fromRGB(180,100,255),
-	Success = Color3.fromRGB(45,200,120), Warning = Color3.fromRGB(255,180,50),
-	Error = Color3.fromRGB(235,80,80), Info = Color3.fromRGB(60,160,230),
-	ToggleEnabled = Color3.fromRGB(160,80,255), ToggleDisabled = Color3.fromRGB(62,56,80),
-	SliderProgress = Color3.fromRGB(160,80,255),
-	Input = Color3.fromRGB(28,24,42), InputStroke = Color3.fromRGB(54,48,72),
-	InputFocus = Color3.fromRGB(160,80,255), Placeholder = Color3.fromRGB(110,100,140),
-}
-
-Themes.Light = {
-	Text = Color3.fromRGB(30,30,40), TextSecondary = Color3.fromRGB(90,90,100),
-	Background = Color3.fromRGB(240,242,248), BackgroundSecondary = Color3.fromRGB(235,237,244),
-	Surface = Color3.fromRGB(230,232,240), SurfaceHover = Color3.fromRGB(222,224,234),
-	Topbar = Color3.fromRGB(235,237,244), TopbarText = Color3.fromRGB(30,30,40),
-	Tab = Color3.fromRGB(220,222,232), TabHover = Color3.fromRGB(210,212,224), TabActive = Color3.fromRGB(200,202,216),
-	TabText = Color3.fromRGB(100,100,115), TabTextActive = Color3.fromRGB(20,20,30),
-	Element = Color3.fromRGB(232,234,242), ElementHover = Color3.fromRGB(224,226,236),
-	ElementStroke = Color3.fromRGB(210,212,222),
-	Accent = Color3.fromRGB(70,110,220), AccentHover = Color3.fromRGB(90,130,240),
-	Success = Color3.fromRGB(40,170,100), Warning = Color3.fromRGB(220,160,40),
-	Error = Color3.fromRGB(210,60,60), Info = Color3.fromRGB(50,140,210),
-	ToggleEnabled = Color3.fromRGB(70,110,220), ToggleDisabled = Color3.fromRGB(190,192,200),
-	SliderProgress = Color3.fromRGB(70,110,220),
-	Input = Color3.fromRGB(235,237,244), InputStroke = Color3.fromRGB(200,202,214),
-	InputFocus = Color3.fromRGB(70,110,220), Placeholder = Color3.fromRGB(140,140,155),
-}
-
+Themes.Default = { Text = Color3.fromRGB(225,225,230), Background = Color3.fromRGB(18,18,22), Surface = Color3.fromRGB(32,32,40), Topbar = Color3.fromRGB(22,22,28), Tab = Color3.fromRGB(40,40,50), TabActive = Color3.fromRGB(60,60,75), Element = Color3.fromRGB(28,28,36), ElementHover = Color3.fromRGB(34,34,44), Accent = Color3.fromRGB(88,130,255), Success = Color3.fromRGB(45,200,120), Warning = Color3.fromRGB(255,180,50), Error = Color3.fromRGB(235,80,80), ToggleEnabled = Color3.fromRGB(88,130,255), SliderProgress = Color3.fromRGB(88,130,255), Input = Color3.fromRGB(24,24,32) }
+Themes.Midnight = { Text = Color3.fromRGB(200,200,210), Background = Color3.fromRGB(10,10,14), Surface = Color3.fromRGB(22,23,32), Topbar = Color3.fromRGB(14,15,20), Tab = Color3.fromRGB(30,32,42), TabActive = Color3.fromRGB(48,50,65), Element = Color3.fromRGB(20,21,28), Accent = Color3.fromRGB(100,120,255), ToggleEnabled = Color3.fromRGB(100,120,255), SliderProgress = Color3.fromRGB(100,120,255) }
+Themes.AMOLED = { Text = Color3.fromRGB(200,200,210), Background = Color3.fromRGB(0,0,0), Surface = Color3.fromRGB(12,12,16), Topbar = Color3.fromRGB(0,0,0), Tab = Color3.fromRGB(18,18,24), TabActive = Color3.fromRGB(34,34,46), Element = Color3.fromRGB(10,10,14), Accent = Color3.fromRGB(80,140,255), ToggleEnabled = Color3.fromRGB(80,140,255), SliderProgress = Color3.fromRGB(80,140,255) }
+Themes.Neon = { Text = Color3.fromRGB(220,220,240), Background = Color3.fromRGB(10,8,20), Surface = Color3.fromRGB(22,18,38), Topbar = Color3.fromRGB(14,10,26), Tab = Color3.fromRGB(32,26,50), TabActive = Color3.fromRGB(50,42,72), Element = Color3.fromRGB(18,14,32), Accent = Color3.fromRGB(130,60,255), ToggleEnabled = Color3.fromRGB(130,60,255), SliderProgress = Color3.fromRGB(130,60,255) }
 ThemeManager.Themes = Themes
 ThemeManager:ApplyTheme("Default")
-function ThemeManager:GetTheme(name) return Themes[name] or self._customThemes[name] end
+function ThemeManager:GetTheme(n) return Themes[n] or self._customThemes[n] end
 function ThemeManager:GetCurrent() return self._current end
-function ThemeManager:GetCurrentName() return self._currentName end
-function ThemeManager:GetAllThemes()
-	local names = {}
-	for n in pairs(Themes) do table.insert(names, n) end
-	for n in pairs(self._customThemes) do table.insert(names, n) end
-	return names
-end
-function ThemeManager:ApplyTheme(name)
-	local theme = self:GetTheme(name); if not theme then return false end
-	self._current = theme; self._currentName = name
-	for _, cb in ipairs(self._listeners) do pcall(cb, theme, name) end
-	return true
-end
+function ThemeManager:GetAllThemes() local n = {}; for k in pairs(Themes) do table.insert(n,k) end; for k in pairs(self._customThemes) do table.insert(n,k) end; return n end
+function ThemeManager:ApplyTheme(n) local t = self:GetTheme(n); if not t then return false end; self._current = t; self._currentName = n; for _, cb in ipairs(self._listeners) do pcall(cb, t, n) end; return true end
 function ThemeManager:OnThemeChanged(cb) table.insert(self._listeners, cb) end
-function ThemeManager:RegisterTheme(name, data) if Themes[name] then return false end; self._customThemes[name] = data; return true end
 
--- 6. Blur Engine
-local BlurEngine = {}
-local blurs = {}
-function BlurEngine:Attach(screenGui, intensity)
-	intensity = intensity or 24
-	local blur = Instance.new("ImageLabel")
-	blur.Name = "VoidUIBlur"; blur.Size = UDim2.new(1,0,1,0); blur.BackgroundTransparency = 1
-	blur.Image = "rbxassetid://3570695787"; blur.ImageTransparency = 1; blur.ZIndex = 9999; blur.Parent = screenGui
-	table.insert(blurs, blur); return blur
-end
-function BlurEngine:SetIntensity(blur, val)
-	if not blur then return end
-	TweenService:Create(blur, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		ImageTransparency = 1 - (math.clamp(val, 0, 100) / 100)}):Play()
-end
-
--- 7. Acrylic
-local Acrylic = {}
-function Acrylic:Apply(frame, config)
-	config = config or {}
-	frame.BackgroundTransparency = config.TintTransparency or 0.4
-	local shine = Instance.new("ImageLabel")
-	shine.Name = "AcrylicShine"; shine.Size = UDim2.new(1,0,1,0); shine.BackgroundTransparency = 1
-	shine.Image = "rbxassetid://3570695787"; shine.ImageColor3 = Color3.fromRGB(255,255,255)
-	shine.ImageTransparency = 0.92; shine.ZIndex = frame.ZIndex + 1; shine.Parent = frame
-	local border = Instance.new("Frame")
-	border.Name = "AcrylicBorder"; border.Size = UDim2.new(1,0,0,1); border.Position = UDim2.new(0,0,1,0)
-	border.BackgroundColor3 = Color3.fromRGB(255,255,255); border.BackgroundTransparency = 0.85
-	border.BorderSizePixel = 0; border.ZIndex = frame.ZIndex + 1; border.Parent = frame
-end
-
--- 8. Notification Manager
+-- Notification
 local NotificationManager = {}
-local notifQueue = {}; local activeNotifs = {}
-function NotificationManager:Notify(data)
-	data = data or {}
-	local notify = {Title = data.Title or "Notification", Content = data.Content or "", Duration = data.Duration or 5,
-		Color = data.Color or Color3.fromRGB(88,130,255), OnClick = data.OnClick}
-	table.insert(notifQueue, notify)
-	task.spawn(function() self:ProcessQueue() end)
-	return tick()
-end
-function NotificationManager:ProcessQueue()
-	while #notifQueue > 0 and #activeNotifs < 5 do
-		local n = table.remove(notifQueue,1)
-		-- Use RayfieldCore notify as fallback
-		_safe("Notify", function() RayfieldCore:Notify({Title = n.Title, Content = n.Content, Duration = n.Duration}) end)
-		task.wait(0.15)
-	end
-end
+function NotificationManager:Notify(data) data = data or {}; if data.Title or data.Content then warn("[Notify]", data.Title or "", data.Content or "") end end
 
--- 9. Mobile Manager
+-- Mobile Manager
 local MobileManager = {}
 function MobileManager:IsMobile() return UserInputService.TouchEnabled end
-function MobileManager:GetScale()
-	local vp = workspace.CurrentCamera.ViewportSize
-	if vp.X < 600 then return 0.65 elseif vp.X < 900 then return 0.8 elseif vp.X < 1200 then return 0.9 else return 1 end
-end
+function MobileManager:GetScale() local v = workspace.CurrentCamera.ViewportSize; if v.X < 600 then return 0.65 elseif v.X < 900 then return 0.8 elseif v.X < 1200 then return 0.9 else return 1 end end
 
--- 10. Search Manager (simplified)
-local SearchManager = {}
-function SearchManager:FuzzyMatch(text, pattern)
-	if not pattern or #pattern == 0 then return true, 1 end
-	text = text:lower(); pattern = pattern:lower()
-	local pi = 1; local score = 0
-	for ci = 1, #pattern do
-		local pc = pattern:sub(ci,ci); local matched = false
-		while pi <= #text do if text:sub(pi,pi) == pc then score = score + 1; matched = true; pi = pi + 1; break end; pi = pi + 1 end
-		if not matched then return false, 0 end
-	end
-	return true, score / #pattern
-end
-
--- 11. Config Manager
-local ConfigManager = {_flags = {}, _currentProfile = "Default"}
-local CFG_FOLDER = "VoidUI/Configs"
-pcall(function()
-	if isfolder and not isfolder("VoidUI") then makefolder("VoidUI") end
-	if isfolder and not isfolder(CFG_FOLDER) then makefolder(CFG_FOLDER) end
-end)
-function ConfigManager:RegisterFlag(name, value) self._flags[name] = value end
-function ConfigManager:GetFlag(name) return self._flags[name] end
-function ConfigManager:SetFlag(name, value) self._flags[name] = value; return value end
-function ConfigManager:Save(profile)
-	profile = profile or self._currentProfile; local data = {}
-	for n, v in pairs(self._flags) do
-		if typeof(v) == "Color3" then data[n] = {R = v.R*255, G = v.G*255, B = v.B*255} else data[n] = v end
-	end
-	local ok, enc = pcall(function() return HttpService:JSONEncode(data) end)
-	if ok then pcall(function() writefile(CFG_FOLDER.."/"..profile..".json", enc) end) end
-end
-function ConfigManager:Load(profile)
-	profile = profile or self._currentProfile
-	local ok = pcall(function() return readfile(CFG_FOLDER.."/"..profile..".json") end)
-	if not ok then return false end
-	local dOk, data = pcall(function() return HttpService:JSONDecode(ok) end)
-	if not dOk then return false end
-	for n, v in pairs(data) do
-		if type(v) == "table" and v.R then self._flags[n] = Color3.fromRGB(v.R, v.G, v.B) else self._flags[n] = v end
-	end
-	return true
-end
-function ConfigManager:Export() return HttpService:JSONEncode(self._flags) end
-function ConfigManager:Reset() table.clear(self._flags); self:Save() end
-
--- 12. Sidebar Engine
+-- Sidebar Engine
 local SidebarEngine = {}
 function SidebarEngine:Create(config)
 	config = config or {}
-	local container = Instance.new("ScreenGui")
-	container.Name = "VoidUISidebar"; container.DisplayOrder = 800; container.ResetOnSpawn = false
-	container.Parent = gethui and gethui() or CoreGui
-	local frame = Instance.new("Frame")
-	frame.Name = "SidebarFrame"; frame.Size = UDim2.new(0, config.Width or 200, 1, 0)
-	frame.BackgroundColor3 = Color3.fromRGB(16,16,22); frame.BackgroundTransparency = 0.05; frame.BorderSizePixel = 0; frame.ZIndex = 50; frame.Parent = container
-	local content = Instance.new("ScrollingFrame")
-	content.Size = UDim2.new(1,0,1,0); content.BackgroundTransparency = 1; content.ScrollBarThickness = 0; content.BorderSizePixel = 0; content.Parent = frame
-	local listLayout = Instance.new("UIListLayout")
-	listLayout.Padding = UDim.new(0,2); listLayout.Parent = content
-	local padding = Instance.new("UIPadding"); padding.PaddingTop = UDim.new(0,12); padding.Parent = content
-	local sidebar = {Frame = frame, Content = content, Container = container, Items = {}, ItemIndex = 0}
-	function sidebar:AddSection(name)
-		local sf = Instance.new("Frame"); sf.Size = UDim2.new(1,0,0,24); sf.BackgroundTransparency = 1; sf.BorderSizePixel = 0
-		local st = Instance.new("TextLabel"); st.Size = UDim2.new(1,-24,1,0); st.Position = UDim2.new(0,12,0,0); st.BackgroundTransparency = 1
-		st.Font = Enum.Font.GothamSemibold; st.Text = name:upper(); st.TextColor3 = Color3.fromRGB(110,110,125); st.TextSize = 10; st.TextXAlignment = Enum.TextXAlignment.Left; st.Parent = sf
-		sf.Parent = self.Content; return self
-	end
-	function sidebar:AddItem(config)
-		config = config or {}
-		local item = Instance.new("TextButton"); item.Size = UDim2.new(1,-8,0,40); item.Position = UDim2.new(0,4,0,0)
-		item.BackgroundTransparency = 1; item.Text = ""; item.AutoButtonColor = false; item.ZIndex = 55; item.Parent = self.Content
-		local icon = Instance.new("ImageLabel"); icon.Size = UDim2.new(0,22,0,22); icon.Position = UDim2.new(0,12,0.5,0); icon.AnchorPoint = Vector2.new(0,0.5)
-		icon.BackgroundTransparency = 1; icon.Image = config.Icon or ""; icon.ImageColor3 = Color3.fromRGB(170,170,185); icon.ZIndex = 56; icon.Parent = item
-		local label = Instance.new("TextLabel"); label.Size = UDim2.new(1,-50,1,0); label.Position = UDim2.new(0,44,0,0); label.BackgroundTransparency = 1
-		label.Font = Enum.Font.Gotham; label.Text = config.Name or "Item"; label.TextColor3 = Color3.fromRGB(200,200,215); label.TextSize = 14; label.TextXAlignment = Enum.TextXAlignment.Left; label.ZIndex = 56; label.Parent = item
-		if config.Callback then item.MouseButton1Click:Connect(config.Callback) end
-		table.insert(self.Items, {Frame = item, Config = config, Icon = icon, Label = label})
-		return self
-	end
-	return sidebar
+	local c = Instance.new("ScreenGui"); c.Name = "VoidUISidebar"; c.DisplayOrder = 800; c.ResetOnSpawn = false; c.Parent = gethui and gethui() or CoreGui
+	local f = Instance.new("Frame"); f.Size = UDim2.new(0, config.Width or 200, 1, 0); f.BackgroundColor3 = Color3.fromRGB(16,16,22); f.BackgroundTransparency = 0.05; f.BorderSizePixel = 0; f.ZIndex = 50; f.Parent = c
+	local sc = Instance.new("ScrollingFrame"); sc.Size = UDim2.new(1,0,1,0); sc.BackgroundTransparency = 1; sc.ScrollBarThickness = 0; sc.Parent = f
+	local ll = Instance.new("UIListLayout"); ll.Padding = UDim.new(0,2); ll.Parent = sc
+	local s = { Frame = f, Content = sc, Container = c, Items = {} }
+	function s:AddSection(n) local sf = Instance.new("Frame"); sf.Size = UDim2.new(1,0,0,24); sf.BackgroundTransparency = 1; sf.Parent = self.Content; local st = Instance.new("TextLabel"); st.Size = UDim2.new(1,-24,1,0); st.Position = UDim2.new(0,12,0,0); st.BackgroundTransparency = 1; st.Font = Enum.Font.GothamSemibold; st.Text = n:upper(); st.TextColor3 = Color3.fromRGB(110,110,125); st.TextSize = 10; st.TextXAlignment = Enum.TextXAlignment.Left; st.Parent = sf; return self end
+	function s:AddItem(cfg) cfg = cfg or {}; local it = Instance.new("TextButton"); it.Size = UDim2.new(1,-8,0,40); it.BackgroundTransparency = 1; it.Text = ""; it.AutoButtonColor = false; it.ZIndex = 55; it.Parent = self.Content; local ic = Instance.new("ImageLabel"); ic.Size = UDim2.new(0,22,0,22); ic.Position = UDim2.new(0,12,0.5,0); ic.AnchorPoint = Vector2.new(0,0.5); ic.BackgroundTransparency = 1; ic.Image = cfg.Icon or ""; ic.ImageColor3 = Color3.fromRGB(170,170,185); ic.ZIndex = 56; ic.Parent = it; local lb = Instance.new("TextLabel"); lb.Size = UDim2.new(1,-50,1,0); lb.Position = UDim2.new(0,44,0,0); lb.BackgroundTransparency = 1; lb.Font = Enum.Font.Gotham; lb.Text = cfg.Name or "Item"; lb.TextColor3 = Color3.fromRGB(200,200,215); lb.TextSize = 14; lb.TextXAlignment = Enum.TextXAlignment.Left; lb.ZIndex = 56; lb.Parent = it; if cfg.Callback then it.MouseButton1Click:Connect(cfg.Callback) end; table.insert(self.Items, {Frame = it, Config = cfg, Icon = ic, Label = lb}); return self end
+	return s
 end
 
--- 13. Icons System
+-- Icons System
 local Icons = {}
 local iconCache = {}
-local ICONS_FOLDER = "VoidUI/Icons"
-local hasFS = type(writefile) == "function" and type(isfile) == "function"
-local hasCA = type(getcustomasset) == "function"
-
--- Pre-load known PNGs from filesystem
-local function tryLoadIcon(name, filename)
-	if not hasFS or not hasCA then return nil end
-	local fullPath = ICONS_FOLDER .. "/" .. filename
-	local ok, path = pcall(function()
-		if not isfile(fullPath) then return nil end
-		return getcustomasset(fullPath)
-	end)
-	if ok and path then iconCache[name] = path; return path end
-	return nil
-end
-
--- Common icons that might exist in folder
-local commonIcons = {
-	"lupa","config","fechar","salvar","lixeira","perfil","mais","cadeado",
-	"chat","carrinho","enviar","compartilhar","baixar","nuvem","filtro",
-	"lista","subir","descer","direita","esquerda","tocar","ver","ideia",
-	"local","coracao","abas",
-}
-
 function Icons:Resolve(name)
 	if not name or name == "" then return "" end
 	if iconCache[name] then return iconCache[name] end
-	if tonumber(name) then local u = "rbxassetid://"..name; iconCache[name]=u; return u end
+	if tonumber(name) then local u = "rbxassetid://"..name; iconCache[name] = u; return u end
 	return ""
 end
-function Icons:GetIconList() local l = {}; for _,v in ipairs(commonIcons) do table.insert(l,v) end; return l end
 
--- 14. Command Palette
+-- Command Palette
 local CommandPalette = {}
 function CommandPalette:Open(commands, config)
 	config = config or {}
-	local overlay = Instance.new("Frame")
-	overlay.Size = UDim2.new(1,0,1,0); overlay.BackgroundColor3 = Color3.fromRGB(0,0,0); overlay.BackgroundTransparency = 0.6; overlay.ZIndex = 6000; overlay.Parent = gethui and gethui() or CoreGui
-	local container = Instance.new("Frame")
-	container.Size = UDim2.new(0,540,0,0); container.Position = UDim2.new(0.5,0,0,40); container.AnchorPoint = Vector2.new(0.5,0)
-	container.BackgroundColor3 = Color3.fromRGB(24,24,32); container.BorderSizePixel = 0; container.ClipsDescendants = true; container.ZIndex = 6001; container.Parent = overlay
-	local inputBox = Instance.new("TextBox")
-	inputBox.Size = UDim2.new(1,-24,0,42); inputBox.Position = UDim2.new(0,12,0,10); inputBox.BackgroundColor3 = Color3.fromRGB(30,30,38)
-	inputBox.Font = Enum.Font.Gotham; inputBox.Text = ""; inputBox.TextColor3 = Color3.fromRGB(220,220,230); inputBox.TextSize = 15
-	inputBox.PlaceholderText = "Search commands..."; inputBox.PlaceholderColor3 = Color3.fromRGB(100,100,115); inputBox.ClearTextOnFocus = false; inputBox.ZIndex = 6002; inputBox.Parent = container
-	local results = Instance.new("ScrollingFrame")
-	results.Size = UDim2.new(1,-12,0,300); results.Position = UDim2.new(0,6,0,60); results.BackgroundTransparency = 1; results.ScrollBarThickness = 4; results.CanvasSize = UDim2.new(0,0,0,0); results.ZIndex = 6002; results.Parent = container
-	container.Size = UDim2.new(0,540,0,380); inputBox:CaptureFocus()
-	local function close()
-		TweenService:Create(container, TweenInfo.new(0.3, Enum.EasingStyle.Exponential, Enum.EasingDirection.In), {Size = UDim2.new(0,540,0,0), Position = UDim2.new(0.5,0,0,-100)}):Play()
-		task.delay(0.3, function() pcall(function() overlay:Destroy() end) end)
-	end
-	overlay.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then close() end end)
+	local o = Instance.new("Frame"); o.Size = UDim2.new(1,0,1,0); o.BackgroundColor3 = Color3.fromRGB(0,0,0); o.BackgroundTransparency = 0.6; o.ZIndex = 6000; o.Parent = gethui and gethui() or CoreGui
+	local con = Instance.new("Frame"); con.Size = UDim2.new(0,540,0,380); con.Position = UDim2.new(0.5,0,0,40); con.AnchorPoint = Vector2.new(0.5,0); con.BackgroundColor3 = Color3.fromRGB(24,24,32); con.BorderSizePixel = 0; con.ClipsDescendants = true; con.ZIndex = 6001; con.Parent = o
+	local inp = Instance.new("TextBox"); inp.Size = UDim2.new(1,-24,0,42); inp.Position = UDim2.new(0,12,0,10); inp.BackgroundColor3 = Color3.fromRGB(30,30,38); inp.Font = Enum.Font.Gotham; inp.Text = ""; inp.TextColor3 = Color3.fromRGB(220,220,230); inp.TextSize = 15; inp.PlaceholderText = "Search..."; inp.PlaceholderColor3 = Color3.fromRGB(100,100,115); inp.ZIndex = 6002; inp.Parent = con
+	local res = Instance.new("ScrollingFrame"); res.Size = UDim2.new(1,-12,0,300); res.Position = UDim2.new(0,6,0,60); res.BackgroundTransparency = 1; res.ScrollBarThickness = 4; res.ZIndex = 6002; res.Parent = con
+	local function close() TweenService:Create(con, TweenInfo.new(0.3, Enum.EasingStyle.Exponential, Enum.EasingDirection.In), {Size = UDim2.new(0,540,0,0)}):Play(); task.delay(0.3, function() pcall(function() o:Destroy() end) end) end
+	o.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then close() end end)
 	UserInputService.InputBegan:Connect(function(i,p) if p then return end; if i.KeyCode == Enum.KeyCode.Escape then close() end end)
-	-- Filter
-	inputBox:GetPropertyChangedSignal("Text"):Connect(function()
-		local query = inputBox.Text:lower()
-		for _, child in ipairs(results:GetChildren()) do if child:IsA("Frame") then child:Destroy() end end
-		if #query == 0 then results.CanvasSize = UDim2.new(0,0,0,0); return end
-		local y = 0
-		for _, cmd in ipairs(commands or {}) do
-			if (cmd.Name or ""):lower():find(query,1,true) then
-				local item = Instance.new("Frame"); item.Size = UDim2.new(1,-8,0,36); item.Position = UDim2.new(0,4,0,y); item.BackgroundColor3 = Color3.fromRGB(28,28,38); item.BorderSizePixel = 0; item.ZIndex = 6003; item.Parent = results
-				local t = Instance.new("TextLabel"); t.Size = UDim2.new(1,-16,0,18); t.Position = UDim2.new(0,8,0,2); t.BackgroundTransparency = 1; t.Font = Enum.Font.Gotham; t.Text = cmd.Name or ""; t.TextColor3 = Color3.fromRGB(220,220,230); t.TextSize = 14; t.TextXAlignment = Enum.TextXAlignment.Left; t.ZIndex = 6004; t.Parent = item
-				if cmd.Description then
-					local d = Instance.new("TextLabel"); d.Size = UDim2.new(1,-16,0,14); d.Position = UDim2.new(0,8,0,20); d.BackgroundTransparency = 1; d.Font = Enum.Font.Gotham; d.Text = cmd.Description; d.TextColor3 = Color3.fromRGB(140,140,155); d.TextSize = 11; d.TextXAlignment = Enum.TextXAlignment.Left; d.ZIndex = 6004; d.Parent = item
-				end
-				item.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then if cmd.Callback then pcall(cmd.Callback) end; close() end end)
-				y = y + 38
-			end
-		end
-		results.CanvasSize = UDim2.new(0,0,0,y)
+	inp:CaptureFocus(); inp:GetPropertyChangedSignal("Text"):Connect(function()
+		local q = inp.Text:lower(); for _, ch in ipairs(res:GetChildren()) do if ch:IsA("Frame") then ch:Destroy() end end; if #q == 0 then return end; local y = 0
+		for _, cmd in ipairs(commands or {}) do if (cmd.Name or ""):lower():find(q,1,true) then local it = Instance.new("Frame"); it.Size = UDim2.new(1,-8,0,36); it.BackgroundColor3 = Color3.fromRGB(28,28,38); it.BorderSizePixel = 0; it.ZIndex = 6003; it.Parent = res; local t = Instance.new("TextLabel"); t.Size = UDim2.new(1,-16,0,18); t.Position = UDim2.new(0,8,0,2); t.BackgroundTransparency = 1; t.Font = Enum.Font.Gotham; t.Text = cmd.Name or ""; t.TextColor3 = Color3.fromRGB(220,220,230); t.TextSize = 14; t.TextXAlignment = Enum.TextXAlignment.Left; t.ZIndex = 6004; t.Parent = it; it.InputBegan:Connect(function(ix) if ix.UserInputType == Enum.UserInputType.MouseButton1 then if cmd.Callback then pcall(cmd.Callback) end; close() end end); y = y + 38 end
+		res.CanvasSize = UDim2.new(0,0,0,y)
 	end)
 end
 
--- 15. Plugin Manager
-local PluginManager = {_plugins = {}}
-function PluginManager:Register(config)
-	if not config.Name or self._plugins[config.Name] then return false end
-	local plugin = {Name = config.Name, Version = config.Version or "1.0", Enabled = true, Init = config.Init or function() end, Cleanup = config.Cleanup or function() end}
-	self._plugins[config.Name] = plugin; local ok, err = pcall(plugin.Init); if not ok then plugin.Enabled = false end; return plugin
-end
-
--- 16. Dock Manager
-local DockManager = {}
-local docks = {}
-function DockManager:CreateDock(config)
-	config = config or {}
-	local container = Instance.new("ScreenGui"); container.Name = "VoidUIDock"; container.DisplayOrder = 500; container.ResetOnSpawn = false; container.Parent = gethui and gethui() or CoreGui
-	local frame = Instance.new("Frame"); frame.BackgroundColor3 = config.Color or Color3.fromRGB(32,32,40); frame.BackgroundTransparency = 0.2; frame.BorderSizePixel = 0
-	local size = config.Size or 48; local pos = config.Position or "right"
-	if pos == "right" then frame.Position = UDim2.new(1,-size-12,0.5,-(size*3)); frame.Size = UDim2.new(0,size,0,size*6) end
-	frame.Parent = container
-	local dock = {Id = config.Id or "dock", Container = container, Frame = frame}; docks[dock.Id] = dock; return dock
-end
+-- Config Manager
+local ConfigManager = { _flags = {}, _currentProfile = "Default" }
+local CF = "VoidUI/Configs"
+pcall(function() if isfolder and not isfolder("VoidUI") then makefolder("VoidUI") end; if isfolder and not isfolder(CF) then makefolder(CF) end end)
+function ConfigManager:RegisterFlag(n, v) self._flags[n] = v end
+function ConfigManager:GetFlag(n) return self._flags[n] end
+function ConfigManager:SetFlag(n, v) self._flags[n] = v; return v end
+function ConfigManager:Save(p) p = p or self._currentProfile; local d = {}; for n, v in pairs(self._flags) do if typeof(v) == "Color3" then d[n] = {R=v.R*255,G=v.G*255,B=v.B*255} else d[n] = v end end; local ok, enc = pcall(function() return HttpService:JSONEncode(d) end); if ok then pcall(function() writefile(CF.."/"..p..".json", enc) end) end end
+function ConfigManager:Load(p) p = p or self._currentProfile; local ok = pcall(function() return readfile(CF.."/"..p..".json") end); if not ok then return false end; local dk, d = pcall(function() return HttpService:JSONDecode(ok) end); if not dk then return false end; for n, v in pairs(d) do if type(v) == "table" and v.R then self._flags[n] = Color3.fromRGB(v.R, v.G, v.B) else self._flags[n] = v end end; return true end
+function ConfigManager:Export() return HttpService:JSONEncode(self._flags) end
+function ConfigManager:Reset() table.clear(self._flags); self:Save() end
 
 -- Watermark Component
 local WatermarkComponent = {}
-local wmInstances = {}
 function WatermarkComponent:Create(config)
 	config = config or {}
-	local container = Instance.new("ScreenGui"); container.Name = "VoidUIWatermark"; container.DisplayOrder = 10000; container.ResetOnSpawn = false; container.Parent = gethui and gethui() or CoreGui
-	local frame = Instance.new("Frame"); frame.Size = UDim2.new(0, config.Width or 200, 0, config.Height or 28); frame.Position = UDim2.new(0, config.PositionX or 12, 0, config.PositionY or 12)
-	frame.BackgroundColor3 = Color3.fromRGB(18,18,24); frame.BackgroundTransparency = 0.2; frame.BorderSizePixel = 0; frame.Parent = container
-	local text = Instance.new("TextLabel"); text.Size = UDim2.new(1,-12,1,0); text.Position = UDim2.new(0,6,0,0); text.BackgroundTransparency = 1; text.Font = Enum.Font.GothamSemibold; text.TextSize = 13; text.TextColor3 = Color3.fromRGB(220,220,230); text.TextXAlignment = Enum.TextXAlignment.Left; text.Parent = frame
-	local obj = {_running = true}
+	local c = Instance.new("ScreenGui"); c.Name = "VoidUIWatermark"; c.DisplayOrder = 10000; c.ResetOnSpawn = false; c.Parent = gethui and gethui() or CoreGui
+	local f = Instance.new("Frame"); f.Size = UDim2.new(0, config.Width or 200, 0, config.Height or 28); f.Position = UDim2.new(0, config.PositionX or 12, 0, config.PositionY or 12); f.BackgroundColor3 = Color3.fromRGB(18,18,24); f.BackgroundTransparency = 0.2; f.BorderSizePixel = 0; f.Parent = c
+	local t = Instance.new("TextLabel"); t.Size = UDim2.new(1,-12,1,0); t.Position = UDim2.new(0,6,0,0); t.BackgroundTransparency = 1; t.Font = Enum.Font.GothamSemibold; t.TextSize = 13; t.TextColor3 = Color3.fromRGB(220,220,230); t.TextXAlignment = Enum.TextXAlignment.Left; t.Parent = f
+	local obj = { _r = true }
 	RunService.RenderStepped:Connect(function(dt)
-		if not obj._running then return end
-		local fps = 1 / dt; local mem = collectgarbage and math.floor(collectgarbage("count")) or 0
-		local fpsText = config.ShowFPS ~= false and ("FPS: " .. math.floor(fps)) or ""
-		local memText = config.ShowMemory and (" | MEM: " .. mem .. "KB") or ""
-		local customText = config.Text or ""
-		local sep = (customText ~= "" and (fpsText ~= "" or memText ~= "")) and " | " or ""
-		text.Text = customText .. sep .. fpsText .. memText
+		if not obj._r then return end
+		local fps = math.floor(1/dt); local mem = collectgarbage and math.floor(collectgarbage("count")) or 0
+		local fpsT = config.ShowFPS ~= false and ("FPS: " .. fps) or ""
+		local memT = config.ShowMemory and (" | MEM: " .. mem .. "KB") or ""
+		local cusT = config.Text or ""; local sep = (cusT ~= "" and (fpsT ~= "" or memT ~= "")) and " | " or ""
+		t.Text = cusT .. sep .. fpsT .. memT
 	end)
-	local st = {}; function st:Destroy() obj._running = false; container:Destroy() end; return st
+	local st = {}; function st:Destroy() obj._r = false; c:Destroy() end; return st
 end
-
--- Components table
 local Components = { Watermark = WatermarkComponent }
 
-_log("Todos os modulos VoidUI carregados!")
-
 -- ═══════════════════════════════════════════════════════════════
--- 	INTEGRATION LAYER
+-- 	INTEGRATION
 -- ═══════════════════════════════════════════════════════════════
 
 local VoidUI = {}
-
--- Core
-VoidUI.Core = RayfieldCore
-VoidUI.RayfieldCore = RayfieldCore
-
--- Modules
-VoidUI.Signals = Signals
-VoidUI.EventManager = EventManager
-VoidUI.Performance = Performance
-VoidUI.Rendering = Rendering
+VoidUI.Core = WindowCore
 VoidUI.ThemeManager = ThemeManager
-VoidUI.BlurEngine = BlurEngine
-VoidUI.Acrylic = Acrylic
 VoidUI.NotificationManager = NotificationManager
 VoidUI.MobileManager = MobileManager
-VoidUI.SearchManager = SearchManager
 VoidUI.SidebarEngine = SidebarEngine
 VoidUI.Icons = Icons
 VoidUI.CommandPalette = CommandPalette
-VoidUI.PluginManager = PluginManager
-VoidUI.DockManager = DockManager
 VoidUI.ConfigManager = ConfigManager
 VoidUI.Components = Components
 
--- API: CreateWindow
+-- Window creation
 function VoidUI:CreateWindow(config)
 	config = config or {}
-	_log("CreateWindow: " .. (config.Title or "Unnamed"))
-
-	local window = RayfieldCore:CreateWindow({
-		Name = config.Title or config.Name or "VoidUI",
-		Icon = config.Icon or 0,
-		LoadingTitle = config.LoadingTitle or config.Title or "VoidUI",
-		LoadingSubtitle = config.LoadingSubtitle or "Next-Gen UI Library",
-		Theme = "Default",
-		DisableRayfieldPrompts = config.DisableRayfieldPrompts or false,
-		DisableBuildWarnings = true,
-		ToggleUIKeybind = config.ToggleUIKeybind or config.ToggleKeybind or "K",
-		ConfigurationSaving = { Enabled = config.ConfigurationSaving and config.ConfigurationSaving.Enabled or false, FileName = (config.ConfigurationSaving and config.ConfigurationSaving.FileName) or nil },
-		Discord = { Enabled = false },
-		KeySystem = config.KeySystem or false,
-		KeySettings = config.KeySettings,
-	})
-
-	_log("CreateWindow: Window criada com sucesso")
+	local window = WindowCore:CreateWindow(config)
 
 	if config.Theme and config.Theme ~= "Default" then
-		_safe("ApplyTheme", function() window.ModifyTheme(config.Theme); ThemeManager:ApplyTheme(config.Theme) end)
+		ThemeManager:ApplyTheme(config.Theme)
 	end
 
-	local enhancedWindow = {_window = window, _config = config, _tabs = {}}
+	local enhanced = { _window = window, _config = config, _tabs = {} }
 
-	function enhancedWindow:Tab(config)
+	function enhanced:Tab(config)
 		if type(config) == "string" then config = { Name = config, Icon = 0 } end
-		local tab = window:CreateTab(config.Name, config.Icon or 0)
-		local enhancedTab = {_tab = tab, _elements = {}}
-
-		function enhancedTab:Section(name) tab:CreateSection(name); return enhancedTab end
-		function enhancedTab:Button(c) tab:CreateButton({Name = c.Name, Callback = c.Callback or function() end}); return enhancedTab end
-		function enhancedTab:Toggle(c) tab:CreateToggle({Name = c.Name, CurrentValue = c.Default or false, Flag = c.Flag or c.Name, Callback = c.Callback or function() end}); return enhancedTab end
-		function enhancedTab:Slider(c) tab:CreateSlider({Name = c.Name, Range = c.Range or {0,100}, Increment = c.Increment or 1, Suffix = c.Suffix or "", CurrentValue = c.Default or 0, Flag = c.Flag or c.Name, Callback = c.Callback or function() end}); return enhancedTab end
-		function enhancedTab:Input(c) tab:CreateInput({Name = c.Name, CurrentValue = c.Default or "", PlaceholderText = c.Placeholder or "Digite...", Flag = c.Flag or c.Name, RemoveTextAfterFocusLost = c.ClearOnFocus or false, Callback = c.Callback or function() end}); return enhancedTab end
-		function enhancedTab:Dropdown(c) tab:CreateDropdown({Name = c.Name, Options = c.Options or {}, CurrentOption = c.Default and {c.Default} or {}, MultipleOptions = c.Multiple or false, Flag = c.Flag or c.Name, Callback = c.Callback or function() end}); return enhancedTab end
-		function enhancedTab:Keybind(c) tab:CreateKeybind({Name = c.Name, CurrentKeybind = c.Default or "F", HoldToInteract = c.Hold or false, Flag = c.Flag or c.Name, Callback = c.Callback or function() end}); return enhancedTab end
-		function enhancedTab:ColorPicker(c) tab:CreateColorPicker({Name = c.Name, Color = c.Default or Color3.fromRGB(255,255,255), Flag = c.Flag or c.Name, Callback = c.Callback or function() end}); return enhancedTab end
-		function enhancedTab:Label(text, icon, color) tab:CreateLabel(text, icon or 0, color); return enhancedTab end
-		function enhancedTab:Paragraph(c) tab:CreateParagraph({Title = c.Title or "", Content = c.Content or ""}); return enhancedTab end
-		function enhancedTab:Divider() tab:CreateDivider(); return enhancedTab end
-		table.insert(self._tabs, enhancedTab); return enhancedTab
+		local tab = window:CreateTab(config.Name)
+		local et = { _tab = tab, _elements = {} }
+		function et:Section(n) tab:Section(n); return et end
+		function et:Toggle(c) tab:Toggle(c); return et end
+		function et:Button(c) tab:Button(c); return et end
+		function et:Slider(c) tab:Slider(c); return et end
+		function et:Input(c) tab:Input(c); return et end
+		function et:Dropdown(c) tab:Dropdown(c); return et end
+		function et:Keybind(c) tab:Keybind(c); return et end
+		function et:ColorPicker(c) tab:ColorPicker(c); return et end
+		function et:Label(t,i,cl) tab:Label(t,i,cl); return et end
+		function et:Paragraph(c) tab:Paragraph(c); return et end
+		function et:Divider() tab:Divider(); return et end
+		table.insert(self._tabs, et); return et
 	end
 
-	task.delay(2, function()
-		_safe("LoadConfiguration", function()
-			if RayfieldCore.LoadConfiguration then RayfieldCore:LoadConfiguration() end
-		end)
-	end)
-
-	return enhancedWindow
+	return enhanced
 end
 
--- Backward compatibility
-VoidUI.Flags = RayfieldCore.Flags
-VoidUI.Theme = RayfieldCore.Theme
-
-function VoidUI:Notify(data) _safe("Notify", function() RayfieldCore:Notify(data) end) end
-function VoidUI:LoadConfiguration() _safe("LoadConfiguration", function() RayfieldCore:LoadConfiguration() end) end
-function VoidUI:SetVisibility(v) _safe("SetVisibility", function() RayfieldCore:SetVisibility(v) end) end
-function VoidUI:IsVisible() return RayfieldCore:IsVisible() end
-function VoidUI:Destroy() _safe("Destroy", function() RayfieldCore:Destroy() end) end
-function VoidUI:ModifyTheme(name)
-	if name and ThemeManager:GetTheme(name) then ThemeManager:ApplyTheme(name) end
-	_safe("ModifyTheme", function() RayfieldCore:ModifyTheme(name or "Default") end)
-end
-
-_log("VoidUI totalmente carregado! Retornando objeto...")
-
--- ═══════════════════════════════════════════════════════════════
--- 	RETURN
--- ═══════════════════════════════════════════════════════════════
+-- Compatibility
+VoidUI.Flags = {}
+function VoidUI:Notify(d) WindowCore:Notify(d) end
+function VoidUI:LoadConfiguration() WindowCore:LoadConfiguration() end
+function VoidUI:SetVisibility(v) WindowCore:SetVisibility(v) end
+function VoidUI:IsVisible() return WindowCore:IsVisible() end
+function VoidUI:Destroy() WindowCore:Destroy() end
+function VoidUI:ModifyTheme(n) if n and ThemeManager:GetTheme(n) then ThemeManager:ApplyTheme(n) end end
 
 return VoidUI
