@@ -44,7 +44,92 @@ local Lighting = getService("Lighting")
 -- 	PHASE 2: LOAD RAYFIELD CORE
 -- ============================================================
 
-local RayfieldCore = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+local function getCompiler()
+	local compiler = rawget(_G, "loadstring") or rawget(_G, "load")
+	if (not compiler) and getgenv then
+		local ok, env = pcall(getgenv)
+		if ok and type(env) == "table" then
+			compiler = env.loadstring or env.load
+		end
+	end
+	return compiler
+end
+
+local function httpGetText(url)
+	local ok, data = pcall(function()
+		return game:HttpGet(url)
+	end)
+	if ok and type(data) == "string" and #data > 0 then
+		return data
+	end
+
+	local req = (syn and syn.request) or (http and http.request) or http_request or request
+	if req then
+		local rok, resp = pcall(function()
+			return req({ Url = url, Method = "GET" })
+		end)
+		if rok and resp then
+			local body = resp.Body or resp.body
+			if type(body) == "string" and #body > 0 then
+				return body
+			end
+		end
+	end
+
+	return nil
+end
+
+local function loadRemoteModule(url)
+	local compiler = getCompiler()
+	if type(compiler) ~= "function" then
+		return nil, "loadstring/load indisponivel no executor"
+	end
+
+	local source = httpGetText(url)
+	if type(source) ~= "string" then
+		return nil, "falha no download: " .. tostring(url)
+	end
+
+	local cOk, chunkOrErr = pcall(function()
+		return compiler(source)
+	end)
+	if not cOk or type(chunkOrErr) ~= "function" then
+		return nil, "falha ao compilar modulo remoto"
+	end
+
+	local rOk, result = pcall(chunkOrErr)
+	if not rOk then
+		return nil, "falha ao executar modulo remoto: " .. tostring(result)
+	end
+
+	if type(result) ~= "table" then
+		return nil, "modulo remoto nao retornou tabela"
+	end
+
+	return result
+end
+
+local RayfieldCore
+do
+	local sources = {
+		"https://sirius.menu/rayfield",
+		"https://raw.githubusercontent.com/shlexware/Rayfield/main/source",
+	}
+
+	local lastErr = "erro desconhecido"
+	for _, url in ipairs(sources) do
+		local result, err = loadRemoteModule(url)
+		if result then
+			RayfieldCore = result
+			break
+		end
+		lastErr = err or lastErr
+	end
+
+	if not RayfieldCore then
+		error("[VoidUI] Nao foi possivel carregar RayfieldCore: " .. tostring(lastErr))
+	end
+end
 
 -- ============================================================
 -- 	PHASE 3: ENHANCED SYSTEM MODULES

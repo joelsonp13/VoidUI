@@ -9,81 +9,129 @@
 -- 	3. Execute no executor
 -- ============================================================
 
+-- ============================================================
+-- 	DEBUG/LOGS (para identificar erro em executor)
+-- ============================================================
+local DEBUG = true
+local _step = 0
+
+local function dlog(msg)
+	_step += 1
+	local line = string.format("[VoidPanel][%02d] %s", _step, tostring(msg))
+	print(line)
+	if DEBUG then
+		warn(line)
+	end
+end
+
+local function derror(where, err)
+	warn(string.format("[VoidPanel][ERRO] %s -> %s", tostring(where), tostring(err)))
+end
+
+local function safeCall(where, fn)
+	local ok, result = pcall(fn)
+	if ok then
+		dlog(where .. " OK")
+		return true, result
+	end
+	derror(where, result)
+	return false, result
+end
+
+dlog("Iniciando script")
+
 -- Carrega a VoidUI
-local VoidUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/joelsonp13/VoidUI/main/build/Compiled.lua"))()
+local VoidUI
+do
+	local ok, result = safeCall("Load VoidUI (HttpGet + loadstring)", function()
+		return loadstring(game:HttpGet("https://raw.githubusercontent.com/joelsonp13/VoidUI/main/build/Compiled.lua"))()
+	end)
+	if not ok or type(result) ~= "table" then
+		error("[VoidPanel] Falha ao carregar VoidUI. Veja logs acima.")
+	end
+	VoidUI = result
+end
+
+local function createTabCompat(window, name, icon)
+	if type(window.CreateTab) == "function" then
+		return window:CreateTab(name, icon)
+	end
+	if type(window.Tab) == "function" then
+		return window:Tab({ Name = name, Icon = icon })
+	end
+	error("Window não possui CreateTab nem Tab")
+end
 
 -- ============================================================
 -- 	JANELA PRINCIPAL
 -- ============================================================
 
-local Window = VoidUI:CreateWindow({
-	Title = "VoidPanel",
-	LoadingTitle = "VoidUI",
-	LoadingSubtitle = "Next-Gen UI Framework",
-	Theme = "Default",          -- Mude pra: Midnight | AMOLED | Neon | Cyberpunk | Glass | Purple | Light
-	ToggleUIKeybind = "K",
-	ConfigurationSaving = {
-		Enabled = true,
-		FileName = "VoidPanelConfig"
-	},
-})
+local Window
+do
+	local ok, result = safeCall("CreateWindow", function()
+		return VoidUI:CreateWindow({
+			Title = "VoidPanel",
+			LoadingTitle = "VoidUI",
+			LoadingSubtitle = "Next-Gen UI Framework",
+			Theme = "Default", -- Mude pra: Midnight | AMOLED | Neon | Cyberpunk | Glass | Purple | Light
+			ToggleUIKeybind = "K",
+			ConfigurationSaving = {
+				Enabled = true,
+				FileName = "VoidPanelConfig"
+			},
+		})
+	end)
+	if not ok or type(result) ~= "table" then
+		error("[VoidPanel] Falha ao criar janela. Veja logs acima.")
+	end
+	Window = result
+end
 
 -- ============================================================
 -- 	SIDEBAR MODERNA (ícones em PT-BR)
 -- ============================================================
 
-local sidebar = VoidUI.SidebarEngine:Create({
-	Width = 200,
-	CollapsedWidth = 56,
-	Collapsed = false,
-	Side = "left",
-})
-
-sidebar:AddSection("Navegação")
-
-sidebar:AddItem({
-	Name = "Combate",
-	Icon = VoidUI.Icons:Resolve("18"),
-	Active = true,
-	Callback = function()
-		-- Ir para aba Combat (simulado)
-		print("Ir para Combate")
+safeCall("SidebarEngine", function()
+	if not (VoidUI.SidebarEngine and VoidUI.Icons) then
+		dlog("SidebarEngine/Icons indisponível nesta build (pulando sidebar)")
+		return
 	end
-})
+	local sidebar = VoidUI.SidebarEngine:Create({
+		Width = 200,
+		CollapsedWidth = 56,
+		Collapsed = false,
+		Side = "left",
+	})
 
-sidebar:AddItem({
-	Name = "Visual",
-	Icon = VoidUI.Icons:Resolve("ver"),
-	Callback = function()
-		print("Ir para Visual")
-	end
-})
-
-sidebar:AddItem({
-	Name = "Jogador",
-	Icon = VoidUI.Icons:Resolve("perfil"),
-	Callback = function()
-		print("Ir para Jogador")
-	end
-})
-
-sidebar:AddSection("Ferramentas")
-
-sidebar:AddItem({
-	Name = "Configurações",
-	Icon = VoidUI.Icons:Resolve("config"),
-	Callback = function()
-		print("Abrir Config")
-	end
-})
-
-sidebar:AddItem({
-	Name = "Sair",
-	Icon = VoidUI.Icons:Resolve("fechar"),
-	Callback = function()
-		VoidUI:SetVisibility(false)
-	end
-})
+	sidebar:AddSection("Navegação")
+	sidebar:AddItem({
+		Name = "Combate",
+		Icon = VoidUI.Icons:Resolve("18"),
+		Active = true,
+		Callback = function() print("Ir para Combate") end
+	})
+	sidebar:AddItem({
+		Name = "Visual",
+		Icon = VoidUI.Icons:Resolve("ver"),
+		Callback = function() print("Ir para Visual") end
+	})
+	sidebar:AddItem({
+		Name = "Jogador",
+		Icon = VoidUI.Icons:Resolve("perfil"),
+		Callback = function() print("Ir para Jogador") end
+	})
+	sidebar:AddSection("Ferramentas")
+	sidebar:AddItem({
+		Name = "Configurações",
+		Icon = VoidUI.Icons:Resolve("config"),
+		Callback = function() print("Abrir Config") end
+	})
+	sidebar:AddItem({
+		Name = "Sair",
+		Icon = VoidUI.Icons:Resolve("fechar"),
+		Callback = function() VoidUI:SetVisibility(false) end
+	})
+end)
 
 -- ============================================================
 -- 	COMMAND PALETTE (Ctrl+P)
@@ -111,30 +159,42 @@ local commands = {
 }
 
 -- Atalho Ctrl+P para abrir Command Palette
-game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
-	if processed then return end
-	if input.KeyCode == Enum.KeyCode.P and game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftControl) then
-		VoidUI.CommandPalette:Open(commands)
-	end
+safeCall("Bind CommandPalette", function()
+	game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
+		if processed then return end
+		if input.KeyCode == Enum.KeyCode.P and game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftControl) then
+			if VoidUI.CommandPalette and VoidUI.CommandPalette.Open then
+				VoidUI.CommandPalette:Open(commands)
+			else
+				dlog("CommandPalette indisponível nesta build")
+			end
+		end
+	end)
 end)
 
 -- ============================================================
 -- 	WATERMARK COM FPS
 -- ============================================================
 
-local watermark = VoidUI.Components.Watermark:Create({
-	Text = "VoidPanel",
-	ShowFPS = true,
-	ShowMemory = true,
-	PositionX = 12,
-	PositionY = 12,
-})
+safeCall("Watermark", function()
+	if not (VoidUI.Components and VoidUI.Components.Watermark) then
+		dlog("Components.Watermark indisponível nesta build")
+		return
+	end
+	VoidUI.Components.Watermark:Create({
+		Text = "VoidPanel",
+		ShowFPS = true,
+		ShowMemory = true,
+		PositionX = 12,
+		PositionY = 12,
+	})
+end)
 
 -- ============================================================
 -- 	ABA: COMBATE
 -- ============================================================
 
-local CombatTab = Window:CreateTab("Combate", VoidUI.Icons:Resolve("18"))
+local CombatTab = createTabCompat(Window, "Combate", 0)
 
 local AuraSection = CombatTab:CreateSection("Aura")
 
@@ -203,7 +263,7 @@ local TargetColor = CombatTab:CreateColorPicker({
 -- 	ABA: VISUAL
 -- ============================================================
 
-local VisualTab = Window:CreateTab("Visual", VoidUI.Icons:Resolve("ver"))
+local VisualTab = createTabCompat(Window, "Visual", 0)
 
 local ESPSection = VisualTab:CreateSection("ESP")
 
@@ -265,7 +325,7 @@ local FOVSlider = VisualTab:CreateSlider({
 -- 	ABA: JOGADOR
 -- ============================================================
 
-local PlayerTab = Window:CreateTab("Jogador", VoidUI.Icons:Resolve("perfil"))
+local PlayerTab = createTabCompat(Window, "Jogador", 0)
 
 local MovementSection = PlayerTab:CreateSection("Movimento")
 
@@ -326,7 +386,7 @@ local NoclipKey = PlayerTab:CreateKeybind({
 -- 	ABA: CONFIGURAÇÕES
 -- ============================================================
 
-local SettingsTab = Window:CreateTab("Config", VoidUI.Icons:Resolve("config"))
+local SettingsTab = createTabCompat(Window, "Config", 0)
 
 local UISection = SettingsTab:CreateSection("Interface")
 
@@ -385,26 +445,30 @@ local ExportButton = SettingsTab:CreateButton({
 
 local AboutSection = SettingsTab:CreateSection("Sobre")
 
-local AboutLabel = SettingsTab:CreateLabel("VoidPanel v1.0.0", VoidUI.Icons:Resolve("ideia"))
-local AboutLabel2 = SettingsTab:CreateLabel("Feito com VoidUI Framework", VoidUI.Icons:Resolve("coracao"))
+local AboutLabel = SettingsTab:CreateLabel("VoidPanel v1.0.0", 0)
+local AboutLabel2 = SettingsTab:CreateLabel("Feito com VoidUI Framework", 0)
 
 -- ============================================================
 -- 	NOTIFICAÇÃO DE BOAS-VINDAS
 -- ============================================================
 
 task.delay(1, function()
-	VoidUI:Notify({
-		Title = "VoidPanel",
-		Content = "Bem-vindo! Painel carregado com sucesso.",
-		Duration = 5,
-	})
+	safeCall("Welcome Notify", function()
+		VoidUI:Notify({
+			Title = "VoidPanel",
+			Content = "Bem-vindo! Painel carregado com sucesso.",
+			Duration = 5,
+		})
+	end)
 end)
 
 -- ============================================================
 -- 	LOAD CONFIGURATION
 -- ============================================================
 
-VoidUI:LoadConfiguration()
+safeCall("LoadConfiguration", function()
+	VoidUI:LoadConfiguration()
+end)
 
 -- ============================================================
 -- 	FPS GRAPH (opcional, descomente para ativar)
@@ -424,3 +488,4 @@ VoidUI:LoadConfiguration()
 print("✅ VoidPanel carregado com sucesso!")
 print("🔹 Pressione K para mostrar/esconder a UI")
 print("🔹 Pressione Ctrl+P para abrir a Command Palette")
+dlog("Script finalizado")
