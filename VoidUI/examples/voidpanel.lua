@@ -217,7 +217,6 @@ safeCall("SidebarEngine", function()
 		Collapsed = false,
 		Side = "left",
 	})
-
 	sidebar:AddSection("Navegação")
 	sidebar:AddItem({
 		Name = "Combate",
