@@ -1,0 +1,19 @@
+# Roblox executor files
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor files
+*.sublime-workspace
+*.vscode/settings.json
+
+# Temp
+*.log
+*.tmp
+temp/
