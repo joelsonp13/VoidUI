@@ -139,25 +139,33 @@ do
 				local okRun, result = pcall(chunkOrErr)
 				if okRun and type(result) == "table" then
 					RayfieldCore = result
+				else
+					env.__VOIDUI_RAYFIELD_LASTERR = "exec source: " .. tostring(result)
 				end
+			else
+				env.__VOIDUI_RAYFIELD_LASTERR = "compile source: " .. tostring(chunkOrErr)
 			end
+		else
+			env.__VOIDUI_RAYFIELD_LASTERR = "compiler indisponivel para VOIDUI_RAYFIELD_SOURCE"
 		end
 	end
 
-	local sources = {
-		(type(env) == "table" and env.VOIDUI_RAYFIELD_URL) or nil,
-		"https://sirius.menu/rayfield",
-		"https://raw.githubusercontent.com/shlexware/Rayfield/main/source",
-	}
+	local sources = {}
+	if type(env) == "table" and type(env.VOIDUI_RAYFIELD_URL) == "string" and #env.VOIDUI_RAYFIELD_URL > 0 then
+		table.insert(sources, env.VOIDUI_RAYFIELD_URL)
+	end
+	table.insert(sources, "https://sirius.menu/rayfield")
+	table.insert(sources, "https://raw.githubusercontent.com/shlexware/Rayfield/main/source")
+	table.insert(sources, "https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source")
 
-	local lastErr = "erro desconhecido"
+	local lastErr = (type(env) == "table" and env.__VOIDUI_RAYFIELD_LASTERR) or "erro desconhecido"
 	for _, url in ipairs(sources) do
 		local result, err = loadRemoteModule(url)
 		if result then
 			RayfieldCore = result
 			break
 		end
-		lastErr = err or lastErr
+		lastErr = tostring(err or lastErr) .. " | url=" .. tostring(url)
 	end
 
 	if not RayfieldCore then
